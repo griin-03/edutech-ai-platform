@@ -1,0 +1,119 @@
+@import "tailwindcss";
+@plugin "tailwindcss-animate";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  /* MÀU NỀN: Màu kem sữa (Milk Foam) */
+  --background: hsl(40 20% 97%); 
+  --foreground: hsl(25 10% 20%); /* Màu nâu đen */
+
+  /* CARD: Trắng ngà */
+  --card: hsl(40 20% 95%);
+  --card-foreground: hsl(25 10% 20%);
+  
+  --popover: hsl(40 20% 97%);
+  --popover-foreground: hsl(25 10% 20%);
+
+  /* MÀU CHÍNH: NÂU TRÀ SỮA ĐẬM (Brown Sugar) */
+  --primary: hsl(25 70% 45%); 
+  --primary-foreground: hsl(40 20% 97%);
+
+  --secondary: hsl(30 20% 90%); /* Màu trà sữa nhạt */
+  --secondary-foreground: hsl(25 10% 20%);
+
+  --muted: hsl(30 20% 90%);
+  --muted-foreground: hsl(25 5% 45%);
+
+  --accent: hsl(30 30% 92%);
+  --accent-foreground: hsl(25 70% 45%);
+
+  --destructive: hsl(0 84% 60%);
+  --destructive-foreground: hsl(0 0% 98%);
+
+  --border: hsl(30 15% 85%);
+  --input: hsl(30 15% 85%);
+  --ring: hsl(25 70% 45%);
+
+  --radius: 1rem;
+}
+
+.dark {
+  /* Giao diện tối: Cà phê đen (Dark Coffee) */
+  --background: hsl(20 14% 8%);
+  --foreground: hsl(40 20% 90%);
+
+  --card: hsl(24 10% 12%);
+  --card-foreground: hsl(40 20% 90%);
+  
+  --popover: hsl(24 10% 12%);
+  --popover-foreground: hsl(40 20% 90%);
+
+  --primary: hsl(25 70% 55%); /* Nâu sáng hơn trên nền tối */
+  --primary-foreground: hsl(20 14% 8%);
+
+  --secondary: hsl(24 10% 16%);
+  --secondary-foreground: hsl(40 20% 90%);
+
+  --muted: hsl(24 10% 16%);
+  --muted-foreground: hsl(25 5% 60%);
+
+  --accent: hsl(24 10% 16%);
+  --accent-foreground: hsl(40 20% 90%);
+
+  --destructive: hsl(0 62% 30%);
+  --destructive-foreground: hsl(0 0% 98%);
+
+  --border: hsl(24 10% 16%);
+  --input: hsl(24 10% 16%);
+  --ring: hsl(25 70% 55%);
+}
+
+/* ... Giữ nguyên phần @theme và @layer utilities như cũ ... */
+@theme {
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+}
+
+@layer base {
+  * {
+    border-color: var(--border);
+    border-style: solid;
+  }
+  body {
+    background-color: var(--background);
+    color: var(--foreground);
+    background-attachment: fixed;
+  }
+}
+
+@layer utilities {
+  .glass-milk-tea {
+    @apply bg-stone-50/70 dark:bg-stone-900/70 backdrop-blur-xl border border-stone-200/50 dark:border-stone-800/50;
+  }
+  
+  .btn-milk-tea {
+    @apply bg-gradient-to-r from-amber-600 to-orange-600 text-white shadow-lg shadow-orange-900/20 
+           hover:shadow-orange-900/30 hover:scale-[1.02] active:scale-95 transition-all duration-300;
+  }
+}
