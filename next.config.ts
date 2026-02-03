@@ -1,15 +1,15 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  // 1. QUAN TRỌNG: Bỏ qua lỗi TypeScript & ESLint để Vercel deploy thành công
+  // 1. Giữ lại TypeScript ignore (Cái này vẫn dùng được)
   typescript: {
     ignoreBuildErrors: true,
   },
-  eslint: {
-    ignoreDuringBuilds: true,
-  },
+  
+  // ⚠️ ĐÃ XÓA PHẦN 'eslint' (Vì Next.js 16 không hỗ trợ nữa)
+  // Việc bỏ qua lỗi ESLint đã được xử lý ở file package.json bằng lệnh "--no-lint" rồi.
 
-  // 2. Cho phép hiển thị ảnh từ mọi nguồn (Tránh lỗi ảnh khóa học không hiện)
+  // 2. Cấu hình ảnh (Giữ nguyên để hiện ảnh khóa học)
   images: {
     remotePatterns: [
       {
@@ -19,10 +19,10 @@ const nextConfig: NextConfig = {
     ],
   },
 
-  // 3. Mở giới hạn upload file (Giữ nguyên của bạn)
+  // 3. Upload file (Giữ nguyên)
   experimental: {
     serverActions: {
-      bodySizeLimit: '10mb', // Tăng lên 50mb nếu cần
+      bodySizeLimit: '10mb', 
     },
   },
 };
