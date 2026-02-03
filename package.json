@@ -4,14 +4,11 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "//": "--- SỬA DÒNG DƯỚI: Gộp lệnh tạo Prisma vào lệnh Build ---",
     "build": "prisma generate && next build --no-lint",
     "start": "next start",
     "lint": "eslint"
-    "//": "--- ĐÃ XÓA DÒNG postinstall ĐỂ TRÁNH LỖI KẸT ---"
   },
   "dependencies": {
-    "//": "--- QUAN TRỌNG: Đưa @prisma/client lên đây ---",
     "@prisma/client": "^6.19.2",
     "@google/generative-ai": "^0.24.1",
     "@hookform/resolvers": "^5.2.2",
@@ -54,7 +51,6 @@
     "zustand": "^5.0.10"
   },
   "devDependencies": {
-    "//": "--- Prisma CLI vẫn để ở đây ---",
     "prisma": "^6.19.2",
     "@tailwindcss/postcss": "^4",
     "@types/bcryptjs": "^2.4.6",
