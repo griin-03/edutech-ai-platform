@@ -1,17 +1,19 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { SessionProvider, useSession } from "next-auth/react"; 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
+// --- ĐÃ THÊM IMPORT CÒN THIẾU Ở ĐÂY ---
 import { 
   Tooltip, TooltipContent, TooltipProvider, TooltipTrigger 
 } from "@/components/ui/tooltip";
 import { 
-  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuLabel, DropdownMenuSeparator
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuRadioGroup, DropdownMenuRadioItem
 } from "@/components/ui/dropdown-menu";
 import { 
   Bot, Send, Mic, Paperclip, Image as ImageIcon, MoreHorizontal, 
@@ -19,9 +21,11 @@ import {
   RotateCcw, Zap, Calculator, Code, 
   GraduationCap, Globe, ChevronRight, MessageSquare,
   Settings, User, FileText, FileSpreadsheet, Camera, UploadCloud,
-  StopCircle, ChevronDown, ChevronUp as IconChevronUp
+  StopCircle, ChevronDown, ChevronUp as IconChevronUp, LogOut, UserCircle, Crown, PanelRightClose, PanelRightOpen, X, Loader2
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { signOut } from "next-auth/react";
+import Link from "next/link";
 
 // --- CONSTANTS ---
 const AI_PERSONAS = [
@@ -31,22 +35,22 @@ const AI_PERSONAS = [
   { id: "code", name: "Dev Senior", role: "Mentor Lập trình", icon: Code, color: "bg-emerald-500", desc: "Debug, Clean Code, Architecture." },
 ];
 
-const CHAT_HISTORY = [
-  { label: "Hôm nay", items: ["Giải thích React Hooks", "Chấm điểm bài Essay Task 2"] },
-  { label: "Hôm qua", items: ["Lộ trình học Python", "Công thức đạo hàm"] },
+const AI_MODELS = [
+    { id: "standard", name: "Flash (Free)", desc: "Nhanh, cơ bản", icon: Zap },
+    { id: "pro", name: "Pro (GPT-4)", desc: "Thông minh, sâu sắc", icon: Crown },
 ];
 
-// --- COMPONENT: TIN NHẮN CÓ THỂ RÚT GỌN ---
+// --- COMPONENT CON: RÚT GỌN TIN NHẮN ---
 const MessageContent = ({ content, isUser }: { content: string, isUser: boolean }) => {
   const [isExpanded, setIsExpanded] = useState(false);
-  const maxLength = 250; 
+  const maxLength = 300; 
   const shouldTruncate = content.length > maxLength;
 
   if (!shouldTruncate) return <div className="whitespace-pre-wrap">{content}</div>;
 
   return (
-    <div className="flex flex-col items-start">
-      <div className="whitespace-pre-wrap">
+    <div className="flex flex-col items-start w-full">
+      <div className="whitespace-pre-wrap break-words w-full">
         {isExpanded ? content : `${content.slice(0, maxLength)}...`}
       </div>
       <button 
@@ -62,92 +66,161 @@ const MessageContent = ({ content, isUser }: { content: string, isUser: boolean 
   );
 };
 
-export default function AITutorPage() {
-  const [messages, setMessages] = useState([
-    { 
-      id: 1, 
-      role: "ai", 
-      content: "Chào Tuấn Anh! 👋 Mình là **EduTech Genious**. Hôm nay bạn muốn mình giúp gì nào?", 
-      time: "10:00 AM" 
-    },
-    {
-      id: 2,
-      role: "user",
-      content: "Viết cho mình một lộ trình học IELTS từ 0 lên 6.5 trong 6 tháng.",
-      time: "10:01 AM"
-    }
-  ]);
+// --- COMPONENT CHÍNH (LOGIC) ---
+function AITutorContent() {
+  const { data: session } = useSession();
+  
+  // STATE DỮ LIỆU
+  const [messages, setMessages] = useState<any[]>([]);
+  const [sessions, setSessions] = useState<any[]>([]);
+  const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
+
+  // STATE UI
   const [inputValue, setInputValue] = useState("");
   const [selectedPersona, setSelectedPersona] = useState(AI_PERSONAS[0]);
+  const [selectedModel, setSelectedModel] = useState("standard"); // Chọn model AI
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isRightSidebarOpen, setIsRightSidebarOpen] = useState(true); // Toggle thanh bên phải
+  const [isLoading, setIsLoading] = useState(false);
+  
+  // STATE FEATURE (Mic, File)
   const [isRecording, setIsRecording] = useState(false);
-  const [isLoading, setIsLoading] = useState(false); // Trạng thái đang xử lý để chặn spam
-  const scrollViewportRef = useRef<HTMLDivElement>(null); 
+  const [attachment, setAttachment] = useState<File | null>(null); // File đính kèm
 
-  // Auto scroll
+  // REFS
+  const scrollViewportRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null); // Input file ẩn
+
+  // 1. LOAD LỊCH SỬ
+  useEffect(() => { fetchSessions(); }, []);
+
+  const fetchSessions = async () => {
+    try {
+      const res = await fetch("/api/ai/chat?action=GET_SESSIONS");
+      const data = await res.json();
+      if (Array.isArray(data)) setSessions(data);
+    } catch (e) { console.error(e); }
+  };
+
+  const loadSession = async (sessionId: string) => {
+    if (sessionId === currentSessionId) return;
+    setIsLoading(true);
+    setCurrentSessionId(sessionId);
+    try {
+      const res = await fetch(`/api/ai/chat?action=GET_MESSAGES&sessionId=${sessionId}`);
+      const data = await res.json();
+      if (Array.isArray(data)) {
+        setMessages(data.map((m: any) => ({
+          id: m.id, role: m.role === "user" ? "user" : "ai",
+          content: m.content, time: new Date(m.createdAt).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})
+        })));
+      }
+    } catch (e) { console.error(e); }
+    setIsLoading(false);
+    if (window.innerWidth < 1024) setIsSidebarOpen(false);
+  };
+
+  const handleNewChat = () => {
+    setMessages([{ 
+        id: "welcome", role: "ai", 
+        content: `Chào ${session?.user?.name || "bạn"}! 👋 Mình là **${selectedPersona.name}**. Hôm nay bạn muốn mình giúp gì nào?`, 
+        time: "Now"
+    }]);
+    setCurrentSessionId(null);
+    setAttachment(null);
+    if (window.innerWidth < 1024) setIsSidebarOpen(false);
+  };
+
+  // 2. GỬI TIN NHẮN (XỬ LÝ CẢ FILE)
+  const handleSendMessage = async () => {
+    if ((!inputValue.trim() && !attachment) || isLoading) return;
+    
+    let userContent = inputValue;
+    if (attachment) userContent += `\n[Đã đính kèm file: ${attachment.name}]`; // Giả lập gửi file
+
+    setInputValue("");
+    setAttachment(null); // Reset file
+    setIsLoading(true);
+
+    // Optimistic UI
+    const tempMsg = { id: Date.now(), role: "user", content: userContent, time: "Now" };
+    setMessages(prev => [...prev, tempMsg]);
+
+    try {
+      const res = await fetch("/api/ai/chat", {
+        method: "POST",
+        body: JSON.stringify({
+           message: userContent,
+           sessionId: currentSessionId,
+           persona: selectedPersona.id,
+           model: selectedModel // Gửi model lên server (để sau này tính tiền Pro)
+        })
+      });
+      const data = await res.json();
+      
+      if (data.reply) {
+         if (!currentSessionId && data.sessionId) {
+            setCurrentSessionId(data.sessionId);
+            fetchSessions();
+         }
+         const aiMsg = { id: Date.now() + 1, role: "ai", content: data.reply, time: "Now" };
+         setMessages(prev => [...prev, aiMsg]);
+         fetchSessions(); // Cập nhật thứ tự history
+      }
+    } catch (e) {
+       setMessages(prev => [...prev, { id: Date.now(), role: "ai", content: "⚠️ Lỗi kết nối.", time: "Now" }]);
+    } finally {
+       setIsLoading(false);
+    }
+  };
+
+  // 3. XỬ LÝ GHI ÂM (REAL 100% WEB API)
+  const toggleRecording = () => {
+    if (isRecording) {
+        setIsRecording(false);
+        return; // Dừng (trình duyệt tự handle onend)
+    }
+
+    // Kiểm tra trình duyệt hỗ trợ
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+        alert("Trình duyệt của bạn không hỗ trợ ghi âm. Hãy thử Chrome/Edge.");
+        return;
+    }
+
+    const recognition = new SpeechRecognition();
+    recognition.lang = 'vi-VN'; // Set tiếng Việt
+    recognition.continuous = false;
+    
+    recognition.onstart = () => setIsRecording(true);
+    
+    recognition.onresult = (event: any) => {
+        const transcript = event.results[0][0].transcript;
+        setInputValue(prev => prev + " " + transcript);
+    };
+
+    recognition.onend = () => setIsRecording(false);
+    
+    recognition.start();
+  };
+
+  // 4. XỬ LÝ FILE (REAL UI)
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+        setAttachment(e.target.files[0]);
+    }
+  };
+
+  // Auto Scroll
   useEffect(() => {
     if (scrollViewportRef.current) {
         const viewport = scrollViewportRef.current.querySelector('[data-radix-scroll-area-viewport]');
-        if (viewport) {
-            viewport.scrollTop = viewport.scrollHeight;
-        } else {
-             scrollViewportRef.current.scrollIntoView({ behavior: "smooth", block: "end" });
-        }
+        if (viewport) viewport.scrollTop = viewport.scrollHeight;
+        else scrollViewportRef.current.scrollIntoView({ behavior: "smooth", block: "end" });
     }
-  }, [messages, isRecording, isLoading]);
-
-  const handleSendMessage = () => {
-    // 1. Kiểm tra rỗng hoặc đang loading thì chặn luôn
-    if (!inputValue.trim() || isLoading) return;
-    
-    setIsLoading(true); // Bắt đầu khóa nút gửi
-    const userQuestion = inputValue;
-    const newUserMsg = { id: Date.now(), role: "user", content: userQuestion, time: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) };
-    
-    setMessages(prev => [...prev, newUserMsg]);
-    setInputValue("");
-
-    // Giả lập AI trả lời sau 1.5s
-    setTimeout(() => {
-      let aiContent = "";
-      if (userQuestion.toLowerCase().includes("ielts") || userQuestion.toLowerCase().includes("writing")) {
-         aiContent = `Tuyệt vời, đây là lộ trình IELTS Writing cho bạn:\n\n**Giai đoạn 1 (Tháng 1-2):** Nắm vững ngữ pháp cơ bản và các dạng câu phức. Tập viết câu đơn giản nhưng chính xác.\n\n**Giai đoạn 2 (Tháng 3-4):** Làm quen với các dạng bài Task 1 (Biểu đồ, Bản đồ) và Task 2 (Opinion, Discussion).\n\n**Giai đoạn 3 (Tháng 5-6):** Luyện đề Cambridge và chấm chữa chi tiết. Tập trung vào Coherence & Cohesion.`;
-      } else {
-         aiContent = `Mình đã nhận được câu hỏi: "${userQuestion}".\nĐang phân tích dữ liệu để đưa ra câu trả lời chính xác nhất cho bạn...`;
-      }
-
-      const newAiMsg = { 
-        id: Date.now() + 1, 
-        role: "ai", 
-        content: aiContent, 
-        time: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) 
-      };
-      setMessages(prev => [...prev, newAiMsg]);
-      setIsLoading(false); // Mở khóa nút gửi
-    }, 1500);
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    // FIX SPAM: Kiểm tra nếu đang gõ tiếng Việt (isComposing) thì không gửi
-    if (e.nativeEvent.isComposing) return;
-
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleSendMessage();
-    }
-  };
-
-  const toggleRecording = () => {
-    if (!isRecording) {
-      setIsRecording(true);
-      setTimeout(() => { setIsRecording(false); setInputValue(prev => prev + " (Voice input...)"); }, 3000);
-    } else {
-      setIsRecording(false);
-    }
-  };
+  }, [messages, isLoading, attachment]);
 
   return (
-    // CONTAINER: h-[calc(100vh-8rem)] để khớp màn hình, không cuộn body
     <div className="flex h-[calc(100vh-8rem)] w-full overflow-hidden bg-[#fdfbf7] dark:bg-[#0c0a09] transition-colors duration-500 rounded-3xl border border-stone-200 dark:border-stone-800 shadow-2xl relative animate-in zoom-in-95 fade-in duration-500">
       
       {/* 1. LEFT SIDEBAR */}
@@ -161,41 +234,59 @@ export default function AITutorPage() {
           </div>
         </div>
         <div className="p-4 shrink-0">
-           <Button className="w-full justify-start gap-2 bg-amber-600 hover:bg-amber-700 text-white shadow-lg shadow-amber-600/20 rounded-xl h-11 font-bold">
+           <Button onClick={handleNewChat} className="w-full justify-start gap-2 bg-amber-600 hover:bg-amber-700 text-white shadow-lg shadow-amber-600/20 rounded-xl h-11 font-bold">
              <Plus size={18} /> Chat mới
            </Button>
         </div>
         <div className="px-4 pb-2 shrink-0">
            <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-stone-400" />
-              <Input placeholder="Tìm kiếm..." className="pl-9 bg-white dark:bg-[#1c1917] border-stone-200 dark:border-stone-800 rounded-xl focus-visible:ring-amber-500" />
+              <Input placeholder="Tìm kiếm..." className="pl-9 bg-white rounded-xl focus-visible:ring-amber-500" />
            </div>
         </div>
+        
         <ScrollArea className="flex-1 px-3">
-           <div className="space-y-6 py-4">
-              {CHAT_HISTORY.map((group, idx) => (
-                <div key={idx}>
-                   <h4 className="px-3 text-xs font-bold text-stone-400 uppercase tracking-wider mb-2">{group.label}</h4>
-                   <div className="space-y-1">
-                      {group.items.map((item, i) => (
-                        <button key={i} className="w-full text-left px-3 py-2.5 rounded-lg text-sm text-stone-600 dark:text-stone-300 hover:bg-white dark:hover:bg-stone-800 hover:shadow-sm transition-all flex items-center gap-2 group truncate">
-                           <MessageSquare size={14} className="text-stone-400 group-hover:text-amber-500 shrink-0" />
-                           <span className="truncate">{item}</span>
-                        </button>
-                      ))}
-                   </div>
-                </div>
-              ))}
+           <div className="space-y-2 py-4">
+              {sessions.length === 0 ? (
+                  <div className="text-center text-stone-400 text-xs mt-10">Chưa có lịch sử chat</div>
+              ) : (
+                  sessions.map((sess) => (
+                    <button key={sess.id} onClick={() => loadSession(sess.id)}
+                        className={cn("w-full text-left px-3 py-3 rounded-lg text-sm transition-all flex items-center gap-3 group truncate border border-transparent",
+                            currentSessionId === sess.id ? "bg-white shadow-sm border-stone-200 font-bold text-amber-700" : "text-stone-600 hover:bg-white/50"
+                        )}>
+                       <MessageSquare size={16} className={cn("shrink-0", currentSessionId === sess.id ? "text-amber-500" : "text-stone-300")} />
+                       <div className="truncate flex-1">
+                           <p className="truncate">{sess.title}</p>
+                           <p className="text-[10px] text-stone-400 opacity-70 mt-0.5">{new Date(sess.updatedAt).toLocaleDateString('vi-VN')}</p>
+                       </div>
+                    </button>
+                  ))
+              )}
            </div>
         </ScrollArea>
-        <div className="p-4 border-t border-stone-200 dark:border-stone-800 bg-white/50 dark:bg-stone-900/50 shrink-0">
+        {/* User Info */}
+        <div className="p-4 border-t border-stone-200 bg-white/50 shrink-0">
            <div className="flex items-center gap-3">
-              <Avatar className="h-9 w-9 border border-stone-200"><AvatarImage src="https://github.com/shadcn.png" /><AvatarFallback>TA</AvatarFallback></Avatar>
+              <Avatar className="h-9 w-9 border border-stone-200">
+                  <AvatarImage src={session?.user?.image || ""} />
+                  <AvatarFallback className="bg-amber-100 text-amber-700 font-bold">{session?.user?.name?.charAt(0)||"U"}</AvatarFallback>
+              </Avatar>
               <div className="flex-1 overflow-hidden">
-                 <p className="text-sm font-bold text-stone-700 dark:text-stone-200 truncate">Tuấn Anh</p>
-                 <Badge variant="secondary" className="text-[10px] bg-amber-100 text-amber-700">PRO</Badge>
+                 <p className="text-sm font-bold text-stone-700 truncate">{session?.user?.name || "Học viên"}</p>
+                 <Badge variant="secondary" className="text-[10px] bg-amber-100 text-amber-700 border-0">PRO</Badge>
               </div>
-              <Button variant="ghost" size="icon" className="h-8 w-8 text-stone-400"><Settings size={16}/></Button>
+              <DropdownMenu>
+                  <DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="h-8 w-8 text-stone-400 rounded-full"><Settings size={16}/></Button></DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-56">
+                      <DropdownMenuLabel>Tài khoản của tôi</DropdownMenuLabel>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem><UserCircle className="mr-2 h-4 w-4" /> Hồ sơ cá nhân</DropdownMenuItem>
+                      <DropdownMenuItem><Zap className="mr-2 h-4 w-4" /> Nâng cấp PRO</DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem className="text-red-600" onClick={() => signOut()}><LogOut className="mr-2 h-4 w-4" /> Đăng xuất</DropdownMenuItem>
+                  </DropdownMenuContent>
+              </DropdownMenu>
            </div>
         </div>
       </div>
@@ -203,22 +294,17 @@ export default function AITutorPage() {
       {/* 2. MAIN CHAT AREA */}
       <div className="flex-1 flex flex-col relative bg-white dark:bg-[#0c0a09] min-w-0 min-h-0">
         
-        {/* Header Cố Định */}
-        <header className="h-16 border-b border-stone-200 dark:border-stone-800 flex items-center justify-between px-6 bg-white/80 dark:bg-[#0c0a09]/80 backdrop-blur-md z-10 shrink-0">
+        {/* Header */}
+        <header className="h-16 border-b border-stone-200 dark:border-stone-800 flex items-center justify-between px-6 bg-white/80 backdrop-blur-md z-10 shrink-0">
            <div className="flex items-center gap-3">
-              <Button variant="ghost" size="icon" onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="text-stone-500 hover:bg-stone-100 dark:hover:bg-stone-800">
+              <Button variant="ghost" size="icon" onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="text-stone-500">
                  {isSidebarOpen ? <ChevronRight /> : <MessageSquare />}
               </Button>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <div className="flex items-center gap-2 bg-stone-100 dark:bg-stone-800 pl-1 pr-3 py-1 rounded-full cursor-pointer hover:bg-stone-200 transition-colors border border-transparent hover:border-amber-200">
-                     <div className={`h-8 w-8 rounded-full flex items-center justify-center text-white ${selectedPersona.color}`}>
-                        <selectedPersona.icon size={16} />
-                     </div>
-                     <div>
-                        <p className="text-sm font-bold text-stone-800 dark:text-stone-100">{selectedPersona.name}</p>
-                        <p className="text-[10px] text-stone-500 leading-none">{selectedPersona.role}</p>
-                     </div>
+                  <div className="flex items-center gap-2 bg-stone-100 pl-1 pr-3 py-1 rounded-full cursor-pointer hover:bg-stone-200 transition-colors border border-transparent hover:border-amber-200">
+                     <div className={`h-8 w-8 rounded-full flex items-center justify-center text-white ${selectedPersona.color}`}><selectedPersona.icon size={16} /></div>
+                     <div><p className="text-sm font-bold text-stone-800">{selectedPersona.name}</p></div>
                      <ChevronDown size={14} className="text-stone-400 ml-1" />
                   </div>
                 </DropdownMenuTrigger>
@@ -227,161 +313,146 @@ export default function AITutorPage() {
                   <DropdownMenuSeparator />
                   {AI_PERSONAS.map(p => (
                     <DropdownMenuItem key={p.id} onClick={() => setSelectedPersona(p)} className="gap-2 cursor-pointer">
-                      <div className={`h-6 w-6 rounded-full flex items-center justify-center text-white ${p.color} text-[10px]`}><p.icon size={12}/></div>
-                      {p.name}
+                      <div className={`h-6 w-6 rounded-full flex items-center justify-center text-white ${p.color} text-[10px]`}><p.icon size={12}/></div> {p.name}
                     </DropdownMenuItem>
                   ))}
                 </DropdownMenuContent>
               </DropdownMenu>
            </div>
+           
+           {/* Model Selector (Standard vs PRO) */}
            <div className="flex items-center gap-2">
-              <Badge variant="outline" className="hidden md:flex bg-amber-50 text-amber-600 border-amber-200">GPT-4o Turbo</Badge>
-              <Button variant="ghost" size="icon" className="text-stone-400 hover:text-amber-600"><RotateCcw size={18}/></Button>
+              <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <div className={cn("flex items-center gap-2 px-3 py-1.5 rounded-lg cursor-pointer transition-all border", selectedModel === 'pro' ? "bg-stone-900 text-white border-stone-900" : "bg-white text-stone-600 border-stone-200")}>
+                        {selectedModel === 'pro' ? <Crown size={14} className="text-amber-400"/> : <Zap size={14}/>}
+                        <span className="text-xs font-bold">{selectedModel === 'pro' ? "Pro Model" : "Standard"}</span>
+                        <ChevronDown size={12}/>
+                    </div>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                      <DropdownMenuLabel>Chọn mô hình AI</DropdownMenuLabel>
+                      <DropdownMenuSeparator/>
+                      <DropdownMenuRadioGroup value={selectedModel} onValueChange={setSelectedModel}>
+                          {AI_MODELS.map(m => (
+                              <DropdownMenuRadioItem key={m.id} value={m.id} className="cursor-pointer">
+                                  <div className="flex items-center gap-2">
+                                      <m.icon size={14} className={m.id === 'pro' ? "text-amber-500" : "text-stone-400"}/>
+                                      <div>
+                                          <p className="font-bold">{m.name}</p>
+                                          <p className="text-[10px] text-stone-400">{m.desc}</p>
+                                      </div>
+                                  </div>
+                              </DropdownMenuRadioItem>
+                          ))}
+                      </DropdownMenuRadioGroup>
+                  </DropdownMenuContent>
+              </DropdownMenu>
+
+              <Button variant="ghost" size="icon" onClick={() => setIsRightSidebarOpen(!isRightSidebarOpen)} className="text-stone-400 hover:text-amber-600">
+                  {isRightSidebarOpen ? <PanelRightClose size={18}/> : <PanelRightOpen size={18}/>}
+              </Button>
            </div>
         </header>
 
-        {/* --- KHU VỰC CHAT (SCROLL) --- */}
+        {/* Chat Scroll */}
         <div className="flex-1 overflow-hidden relative" ref={scrollViewportRef}> 
            <ScrollArea className="h-full w-full px-4 sm:px-6">
               <div className="max-w-3xl mx-auto space-y-6 py-6 pb-4">
-                 {messages.map((msg) => (
-                   <div key={msg.id} className={cn("flex gap-4 animate-in fade-in slide-in-from-bottom-2", msg.role === "user" ? "flex-row-reverse" : "flex-row")}>
-                      <div className={cn(
-                        "h-10 w-10 rounded-full flex items-center justify-center shadow-sm shrink-0 mt-1",
-                        msg.role === "ai" ? `${selectedPersona.color} text-white` : "bg-stone-200 dark:bg-stone-700"
-                      )}>
-                         {msg.role === "ai" ? <selectedPersona.icon size={20} /> : <User size={20} className="text-stone-500 dark:text-stone-300"/>}
-                      </div>
-
-                      <div className={cn(
-                        "group relative max-w-[85%] rounded-2xl p-4 shadow-sm leading-relaxed text-sm md:text-base",
-                        msg.role === "user" 
-                          ? "bg-gradient-to-br from-amber-500 to-orange-600 text-white rounded-tr-none" 
-                          : "bg-[#f5f5f4] dark:bg-[#1c1917] border border-stone-200 dark:border-stone-800 text-stone-800 dark:text-stone-200 rounded-tl-none"
-                      )}>
-                         <div className={cn("flex items-center gap-2 mb-1 text-[10px] font-bold opacity-70", msg.role === "user" ? "justify-end text-amber-100" : "text-stone-500")}>
-                            <span>{msg.role === "ai" ? selectedPersona.name : "Bạn"}</span>
-                            <span>•</span>
-                            <span>{msg.time}</span>
-                         </div>
-
-                         <MessageContent content={msg.content} isUser={msg.role === "user"} />
-
-                         {msg.role === "ai" && (
-                            <div className="absolute -bottom-8 left-0 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                               <Button variant="ghost" size="icon" className="h-7 w-7 text-stone-400 hover:text-amber-600"><Copy size={14}/></Button>
-                               <Button variant="ghost" size="icon" className="h-7 w-7 text-stone-400 hover:text-emerald-600"><ThumbsUp size={14}/></Button>
-                            </div>
-                         )}
-                      </div>
-                   </div>
-                 ))}
-                 
-                 {/* Loading Indicator */}
+                 {messages.length === 0 && !isLoading ? (
+                     <div className="flex flex-col items-center justify-center h-[50vh] text-stone-400 animate-in fade-in zoom-in-95 duration-500">
+                         <div className={`h-20 w-20 rounded-3xl flex items-center justify-center text-white mb-6 shadow-xl ${selectedPersona.color}`}><selectedPersona.icon size={40} /></div>
+                         <h3 className="text-xl font-bold text-stone-700">Xin chào, {session?.user?.name || "Bạn"}!</h3>
+                         <p className="max-w-md text-center mt-2">Mình là <span className="font-bold text-amber-600">{selectedPersona.name}</span>. {selectedPersona.desc}</p>
+                     </div>
+                 ) : (
+                     messages.map((msg) => (
+                       <div key={msg.id} className={cn("flex gap-4 animate-in fade-in slide-in-from-bottom-2", msg.role === "user" ? "flex-row-reverse" : "flex-row")}>
+                          <div className={cn("h-10 w-10 rounded-full flex items-center justify-center shadow-sm shrink-0 mt-1", msg.role === "ai" ? `${selectedPersona.color} text-white` : "bg-stone-200")}>
+                             {msg.role === "ai" ? <selectedPersona.icon size={20} /> : <User size={20} className="text-stone-500"/>}
+                          </div>
+                          <div className={cn("group relative max-w-[85%] rounded-2xl p-4 shadow-sm leading-relaxed text-sm md:text-base", msg.role === "user" ? "bg-gradient-to-br from-amber-500 to-orange-600 text-white rounded-tr-none" : "bg-[#f5f5f4] border border-stone-200 text-stone-800 rounded-tl-none")}>
+                             <div className={cn("flex items-center gap-2 mb-1 text-[10px] font-bold opacity-70", msg.role === "user" ? "justify-end text-amber-100" : "text-stone-500")}>
+                                <span>{msg.role === "ai" ? selectedPersona.name : "Bạn"}</span> • <span>{msg.time}</span>
+                             </div>
+                             <MessageContent content={msg.content} isUser={msg.role === "user"} />
+                          </div>
+                       </div>
+                     ))
+                 )}
                  {isLoading && (
                    <div className="flex gap-4 animate-in fade-in slide-in-from-bottom-2">
-                      <div className={`h-10 w-10 rounded-full flex items-center justify-center text-white ${selectedPersona.color} shadow-sm shrink-0`}>
-                         <Bot size={20} className="animate-bounce" />
-                      </div>
-                      <div className="bg-[#f5f5f4] dark:bg-[#1c1917] border border-stone-200 dark:border-stone-800 rounded-2xl rounded-tl-none p-4 flex items-center gap-1">
+                      <div className={`h-10 w-10 rounded-full flex items-center justify-center text-white ${selectedPersona.color} shadow-sm shrink-0`}><Bot size={20} className="animate-bounce" /></div>
+                      <div className="bg-[#f5f5f4] border border-stone-200 rounded-2xl rounded-tl-none p-4 flex items-center gap-1">
                          <span className="w-2 h-2 bg-stone-400 rounded-full animate-bounce [animation-delay:-0.3s]"></span>
                          <span className="w-2 h-2 bg-stone-400 rounded-full animate-bounce [animation-delay:-0.15s]"></span>
                          <span className="w-2 h-2 bg-stone-400 rounded-full animate-bounce"></span>
                       </div>
                    </div>
                  )}
-
-                 {isRecording && (
-                   <div className="flex justify-center items-center py-4">
-                      <div className="flex items-center gap-2 bg-red-50 text-red-600 px-4 py-2 rounded-full border border-red-200 animate-pulse">
-                         <div className="w-2 h-2 bg-red-600 rounded-full animate-bounce"></div>
-                         <span className="text-xs font-bold">Đang lắng nghe...</span>
-                      </div>
-                   </div>
-                 )}
-                 
                  <div className="h-4" /> 
               </div>
            </ScrollArea>
         </div>
 
-        {/* Input Area (Cố định ở đáy) */}
-        <div className="p-4 sm:p-6 bg-white dark:bg-[#0c0a09] shrink-0 z-20 border-t border-stone-100 dark:border-stone-800">
-           <div className="max-w-3xl mx-auto bg-[#fcfaf8] dark:bg-[#151311] border-2 border-stone-200 dark:border-stone-700 rounded-3xl shadow-lg p-2 flex flex-col gap-2 relative focus-within:border-amber-500 transition-colors">
+        {/* Input Area */}
+        <div className="p-4 sm:p-6 bg-white shrink-0 z-20 border-t border-stone-100">
+           {/* Attachment Preview */}
+           {attachment && (
+              <div className="max-w-3xl mx-auto mb-2 flex items-center gap-2 bg-stone-100 px-3 py-2 rounded-lg w-fit animate-in slide-in-from-bottom-2">
+                 <div className="bg-white p-1 rounded border border-stone-200"><FileText size={16} className="text-amber-600"/></div>
+                 <span className="text-xs font-bold text-stone-700 max-w-[200px] truncate">{attachment.name}</span>
+                 <button onClick={() => setAttachment(null)} className="ml-2 text-stone-400 hover:text-red-500"><X size={14}/></button>
+              </div>
+           )}
+
+           <div className="max-w-3xl mx-auto bg-[#fcfaf8] border-2 border-stone-200 rounded-3xl shadow-lg p-2 flex flex-col gap-2 relative focus-within:border-amber-500 transition-colors">
               <Textarea 
                 value={inputValue}
                 onChange={(e) => setInputValue(e.target.value)}
-                onKeyDown={handleKeyDown} // Dùng hàm xử lý riêng để chặn spam
-                placeholder={isRecording ? "Đang ghi âm..." : isLoading ? "AI đang trả lời..." : `Nhắn tin cho ${selectedPersona.name}...`} 
+                onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendMessage(); }
+                }}
+                placeholder={isRecording ? "Đang ghi âm..." : `Nhắn tin cho ${selectedPersona.name}...`} 
                 className="min-h-[50px] max-h-[150px] border-0 focus-visible:ring-0 bg-transparent resize-none text-base px-4 py-2 placeholder:text-stone-400 custom-scrollbar" 
-                disabled={isRecording || isLoading} // Khóa khi đang loading
+                disabled={isRecording || isLoading} 
               />
               
               <div className="flex justify-between items-center px-2 pb-1">
                  <div className="flex gap-1">
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-9 w-9 text-stone-400 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-stone-800 rounded-full">
-                          <Paperclip size={18}/>
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="start">
-                        <DropdownMenuLabel>Đính kèm tệp</DropdownMenuLabel>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem className="cursor-pointer gap-2"><FileText size={16}/> Tài liệu Word/PDF</DropdownMenuItem>
-                        <DropdownMenuItem className="cursor-pointer gap-2"><FileSpreadsheet size={16}/> Excel/Data</DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
+                    {/* Nút File Thật */}
+                    <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileSelect} />
+                    
+                    <TooltipProvider>
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <Button onClick={() => fileInputRef.current?.click()} variant="ghost" size="icon" className="h-9 w-9 text-stone-400 hover:text-amber-600 rounded-full"><Paperclip size={18}/></Button>
+                            </TooltipTrigger>
+                            <TooltipContent>Đính kèm tệp</TooltipContent>
+                        </Tooltip>
+                    </TooltipProvider>
 
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-9 w-9 text-stone-400 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-stone-800 rounded-full">
-                          <ImageIcon size={18}/>
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="start">
-                        <DropdownMenuLabel>Hình ảnh</DropdownMenuLabel>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem className="cursor-pointer gap-2"><UploadCloud size={16}/> Tải ảnh lên</DropdownMenuItem>
-                        <DropdownMenuItem className="cursor-pointer gap-2"><Camera size={16}/> Chụp ảnh</DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-
-                    <Button 
-                      onClick={toggleRecording}
-                      variant="ghost" 
-                      size="icon" 
-                      className={cn(
-                        "h-9 w-9 rounded-full transition-all",
-                        isRecording ? "bg-red-100 text-red-600 hover:bg-red-200 animate-pulse" : "text-stone-400 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-stone-800"
-                      )}
-                    >
+                    <Button onClick={toggleRecording} variant="ghost" size="icon" className={cn("h-9 w-9 rounded-full", isRecording ? "text-red-600 animate-pulse bg-red-50" : "text-stone-400 hover:text-amber-600")}>
                       {isRecording ? <StopCircle size={20} /> : <Mic size={18} />}
                     </Button>
                  </div>
                  
-                 <Button 
-                    onClick={handleSendMessage} 
-                    disabled={isLoading || !inputValue.trim()}
-                    size="sm" 
-                    className={cn(
-                        "rounded-2xl px-5 h-9 font-bold shadow-md transition-all active:scale-95",
-                        isLoading ? "bg-stone-300 text-stone-500 cursor-not-allowed" : "bg-amber-600 hover:bg-amber-700 text-white"
-                    )}
-                 >
-                    {isLoading ? "..." : <>Gửi <Send size={14} className="ml-2" /></>}
+                 <Button onClick={handleSendMessage} disabled={isLoading || (!inputValue.trim() && !attachment)} size="sm" className={cn("rounded-2xl px-5 h-9 font-bold transition-all", isLoading ? "bg-stone-300" : "bg-amber-600 hover:bg-amber-700 text-white")}>
+                    {isLoading ? <Loader2 size={16} className="animate-spin"/> : <>Gửi <Send size={14} className="ml-2" /></>}
                  </Button>
               </div>
            </div>
-           <p className="text-center text-[10px] text-stone-400 mt-2">EduTech AI có thể mắc lỗi. Hãy kiểm tra lại thông tin quan trọng.</p>
         </div>
       </div>
 
-      {/* 3. RIGHT SIDEBAR (TIPS) */}
-      <div className="w-72 bg-[#fcfaf8] dark:bg-[#12100e] border-l border-stone-200 dark:border-stone-800 hidden xl:flex flex-col shrink-0 min-h-0 animate-in slide-in-from-right-20 fade-in duration-700 delay-200">
-         <div className="p-5 border-b border-stone-200 dark:border-stone-800 bg-white/50 dark:bg-stone-900/50 shrink-0">
-            <h3 className="font-black text-stone-800 dark:text-stone-200 text-lg">Trợ lý học tập</h3>
-            <p className="text-xs text-stone-500 mt-1">Gợi ý thông minh dựa trên bài học</p>
+      {/* 3. RIGHT SIDEBAR (TIPS) - Toggleable */}
+      <div className={cn(
+        "w-72 bg-[#fcfaf8] border-l border-stone-200 hidden xl:flex flex-col shrink-0 min-h-0 transition-all duration-300",
+        !isRightSidebarOpen && "w-0 opacity-0 overflow-hidden border-0"
+      )}>
+         <div className="p-5 border-b border-stone-200 bg-white/50 shrink-0">
+            <h3 className="font-black text-stone-800 text-lg">Trợ lý học tập</h3>
+            <p className="text-xs text-stone-500 mt-1">Gợi ý thông minh</p>
          </div>
 
          <ScrollArea className="flex-1 p-4">
@@ -389,36 +460,26 @@ export default function AITutorPage() {
                <div>
                  <h4 className="px-1 text-xs font-bold text-stone-400 uppercase tracking-wider mb-3 flex items-center gap-1"><Sparkles size={12} className="text-yellow-500"/> Gợi ý nhanh</h4>
                  <div className="space-y-2">
-                    {["Viết dàn ý IELTS Task 2", "Giải thích code Python", "Tạo bài kiểm tra Toán", "Dịch thuật ngữ IT", "Tóm tắt bài văn", "Kiểm tra ngữ pháp"].map((prompt, i) => (
-                      <Button key={i} variant="outline" className="w-full justify-start text-xs h-auto py-2 text-stone-600 dark:text-stone-400 bg-white dark:bg-[#1c1917] border-stone-200 dark:border-stone-800 hover:text-amber-600 hover:border-amber-300 whitespace-normal text-left">
+                    {["Viết dàn ý IELTS Task 2", "Giải thích code Python", "Tạo bài kiểm tra Toán", "Dịch thuật ngữ IT", "Kiểm tra ngữ pháp"].map((prompt, i) => (
+                      <Button key={i} onClick={() => setInputValue(prompt)} variant="outline" className="w-full justify-start text-xs h-auto py-2 text-stone-600 bg-white border-stone-200 hover:text-amber-600 hover:border-amber-300 whitespace-normal text-left">
                          {prompt}
                       </Button>
                     ))}
                  </div>
                </div>
-
-               <div className="p-4 bg-amber-50 dark:bg-amber-900/10 rounded-xl border border-amber-100 dark:border-amber-900/30">
-                  <h5 className="font-bold text-amber-800 dark:text-amber-500 text-sm mb-1 flex items-center gap-2"><Zap size={14}/> Pro Tip</h5>
-                  <p className="text-xs text-amber-700/80 dark:text-amber-500/80 leading-relaxed">
-                    Bạn có thể yêu cầu AI đóng vai người phỏng vấn để luyện tập kỹ năng Speaking.
-                  </p>
-               </div>
             </div>
          </ScrollArea>
-         
-         <div className="p-4 border-t border-stone-200 dark:border-stone-800 bg-white/50 dark:bg-stone-900/50 shrink-0">
-            <div className="flex items-center gap-3">
-               <div className="bg-emerald-100 dark:bg-emerald-900/30 p-2 rounded-lg text-emerald-600">
-                  <GraduationCap size={20} />
-               </div>
-               <div>
-                  <p className="text-xs font-bold text-stone-800 dark:text-stone-300">Tiến độ tuần này</p>
-                  <p className="text-[10px] text-stone-500">Bạn đã tương tác 45 lần.</p>
-               </div>
-            </div>
-         </div>
       </div>
 
     </div>
   );
+}
+
+// Wrapper để bọc SessionProvider (Sửa lỗi cho layout cũ nếu cần, nhưng tốt nhất nên dùng layout mới)
+export default function AITutorPageWrapper() {
+    return (
+        <SessionProvider>
+            <AITutorContent />
+        </SessionProvider>
+    );
 }

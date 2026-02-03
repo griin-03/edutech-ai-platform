@@ -1,0 +1,449 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+// =========================================================
+// 0. CẤU HÌNH NEXTAUTH & ENUM
+// =========================================================
+
+enum UserRole {
+  ADMIN
+  TEACHER
+  STUDENT
+}
+
+model Account {
+  id                String   @id @default(cuid())
+  userId            Int      
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       Int      
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model SystemConfig {
+  id             Int     @id @default(1)
+  appName        String  @default("EduTech AI Platform")
+  maintenanceMsg String? 
+  isMaintenance  Boolean @default(false)
+  allowAiGrading Boolean @default(false)
+
+  // --- MỚI: TỶ LỆ HOA HỒNG SÀN (%) ---
+  // Dùng để tính % Admin nhận được khi Teacher bán khóa học
+  commissionRate Float   @default(20.0) 
+}
+
+// =========================================================
+// 1. NHÓM QUẢN TRỊ NGƯỜI DÙNG & CÀI ĐẶT
+// =========================================================
+model User {
+  id        Int      @id @default(autoincrement())
+  email     String   @unique
+  password  String?
+  name      String?
+  
+  role      UserRole @default(STUDENT) 
+  
+  // Cờ đánh dấu tài khoản Pro
+  isPro     Boolean  @default(false)
+
+  // --- VÍ ĐIỆN TỬ (WALLET) ---
+  balance      Float         @default(0) // Số dư ví
+  transactions Transaction[] // Lịch sử giao dịch
+
+  avatar       String?  @db.LongText  
+  bio          String?  
+  preferences  Json?  
+  
+  createdAt DateTime @default(now())
+
+  // Quan hệ NextAuth
+  accounts      Account[]
+  sessions      Session[]
+
+  // Quan hệ Quản lý
+  createdCourses  Course[] @relation("CourseAuthor") 
+
+  // Quan hệ Hệ thống cũ
+  examResults   ExamResult[]
+  chatSessions  ChatSession[]
+  savedCourses  SavedCourse[]
+
+  // Quan hệ Mạng xã hội
+  posts           Post[]           
+  comments        Comment[]        
+  likes           Like[]           
+  
+  followedBy      Follows[] @relation("following") 
+  following       Follows[] @relation("follower")  
+  
+  notifications Notification[]
+
+  // Quan hệ AI Mentor
+  learningPaths LearningPath[] 
+  dailyTasks    DailyTask[]    
+  focusSessions FocusSession[] 
+  reviews       Review[]
+
+  // Quan hệ Doanh thu (Analytics)
+  purchases     Purchase[]
+
+  // Quan hệ Yêu cầu nâng cấp
+  upgradeRequests UpgradeRequest[]
+}
+
+// --- MODEL LỊCH SỬ GIAO DỊCH VÍ ---
+model Transaction {
+  id          String   @id @default(cuid())
+  amount      Float    // Số tiền (+ là nạp/nhận, - là chi tiêu)
+  type        String   // "DEPOSIT", "PAYMENT", "RECEIVE", "COMMISSION"
+  description String?
+  createdAt   DateTime @default(now())
+
+  userId      Int
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// MODEL YÊU CẦU NÂNG CẤP (UPGRADE REQUEST)
+model UpgradeRequest {
+  id        String   @id @default(uuid())
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  planType  String   @default("LIFETIME") 
+  amount    Float    
+  status    String   @default("PENDING") 
+  content   String?  
+  imageProof String? 
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// =========================================================
+// 2. NHÓM HỌC TẬP & THƯ VIỆN ĐỀ THI
+// =========================================================
+model Course {
+  id          Int      @id @default(autoincrement()) 
+  title       String
+  description String?  @db.Text
+  
+  price        Float    @default(0)        
+  isPublished  Boolean  @default(false)    
+  isPro        Boolean  @default(false)    
+
+  // Trạng thái duyệt khóa học
+  approvalStatus  String  @default("PENDING") 
+  rejectionReason String? 
+  
+  level        String   @default("Beginner")
+  thumbnail    String?
+  category     String   @default("General")
+  format       String   @default("ONLINE") 
+  downloads    Int      @default(0)        
+  rating       Float    @default(5.0)      
+  fileUrl      String?                       
+  metaData     Json?    
+
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  authorId     Int
+  author       User     @relation("CourseAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+
+  // CÁC QUAN HỆ CON
+  chapters      Chapter[]     
+  examResults   ExamResult[]
+  savedCourses  SavedCourse[]
+  reviews       Review[]
+  purchases     Purchase[]
+  
+  // Quan hệ với câu hỏi thi
+  questions     Question[] 
+}
+
+// MODEL CÂU HỎI TRẮC NGHIỆM
+model Question {
+  id            String   @id @default(uuid())
+  text          String   @db.Text 
+  options       Json     
+  correctAnswer String   
+  
+  courseId      Int
+  course        Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  
+  createdAt     DateTime @default(now())
+}
+
+model Chapter {
+  id          String   @id @default(uuid())
+  title       String
+  description String?
+  position    Int      
+  isPublished Boolean  @default(false)
+  isFree      Boolean  @default(false) 
+
+  courseId    Int
+  course      Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  lessons     Lesson[]
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([courseId])
+}
+
+model Lesson {
+  id          String   @id @default(uuid())
+  title       String
+  description String?
+  position    Int
+  isPublished Boolean  @default(false)
+  
+  videoUrl    String?  
+  duration    Int?     
+
+  chapterId   String
+  chapter     Chapter  @relation(fields: [chapterId], references: [id], onDelete: Cascade)
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([chapterId])
+}
+
+// BẢNG REVIEW
+model Review {
+  id        String   @id @default(cuid())
+  rating    Int      
+  comment   String?  @db.Text
+  createdAt DateTime @default(now())
+
+  // Phần trả lời của Giảng viên
+  reply     String?  @db.Text 
+  repliedAt DateTime?
+
+  // Trạng thái báo cáo
+  isFlagged Boolean  @default(false)
+
+  courseId  Int
+  course    Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model ExamResult {
+  id        String   @id @default(cuid())
+  score     Float
+  feedback  String?  @db.Text
+  createdAt DateTime @default(now())
+
+  violationCount Int     @default(0)
+  isSuspended    Boolean @default(false)
+
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  courseId  Int      
+  course    Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+}
+
+model SavedCourse {
+  id        String   @id @default(cuid())
+  savedAt   DateTime @default(now())
+
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  courseId  Int      
+  course    Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, courseId])
+}
+
+// MODEL LƯU LỊCH SỬ MUA HÀNG
+model Purchase {
+  id        String   @id @default(uuid())
+  userId    Int
+  courseId  Int
+  price     Float    
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  course    Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@index([courseId])
+  @@index([userId])
+}
+
+// =========================================================
+// 3. NHÓM AI TUTOR
+// =========================================================
+model ChatSession {
+  id        String   @id @default(cuid())
+  title     String   
+  type      String   @default("tutor") 
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages  ChatMessage[]
+}
+
+model ChatMessage {
+  id        String   @id @default(cuid())
+  role      String   
+  content   String   @db.Text
+  createdAt DateTime @default(now())
+
+  sessionId String
+  session   ChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+}
+
+// =========================================================
+// 4. NHÓM CỘNG ĐỒNG (SOCIAL NETWORK)
+// =========================================================
+model Post {
+  id        String   @id @default(cuid())
+  title     String?  
+  content   String   @db.Text
+  image     String?  
+  category  String   @default("DISCUSSION") 
+  tags      Json?    
+  views     Int      @default(0) 
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  comments  Comment[]
+  likes     Like[]   
+}
+
+model Comment {
+  id        String   @id @default(cuid())
+  content   String   @db.Text
+  createdAt DateTime @default(now())
+
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  postId    String
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  parentId  String?  
+  parent    Comment? @relation("CommentReplies", fields: [parentId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  replies   Comment[] @relation("CommentReplies")
+}
+
+model Like {
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  postId    String
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@id([userId, postId]) 
+}
+
+model Follows {
+  followerId  Int
+  followingId Int
+  follower    User @relation("follower", fields: [followerId], references: [id], onDelete: Cascade)
+  following   User @relation("following", fields: [followingId], references: [id], onDelete: Cascade)
+
+  @@id([followerId, followingId])
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  type      String   
+  message   String
+  isRead    Boolean  @default(false)
+  link      String?  
+  createdAt DateTime @default(now())
+  userId    Int      
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// =========================================================
+// 5. NHÓM AI MENTOR & GAMIFICATION
+// =========================================================
+
+model LearningPath {
+  id        String   @id @default(cuid())
+  title     String   
+  description String?
+  progress    Int      @default(0) 
+  
+  userId      Int
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  milestones  Milestone[] 
+}
+
+model Milestone {
+  id        String   @id @default(cuid())
+  title     String   
+  status    String   @default("LOCKED") 
+  score     Int      @default(0)
+  
+  pathId    String
+  path      LearningPath @relation(fields: [pathId], references: [id], onDelete: Cascade)
+}
+
+model DailyTask {
+  id        String   @id @default(cuid())
+  title     String   
+  xp        Int      @default(50)
+  isCompleted Boolean @default(false)
+  date      DateTime @default(now()) 
+  
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model FocusSession {
+  id        String   @id @default(cuid())
+  duration  Int      
+  createdAt DateTime @default(now())
+  
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
