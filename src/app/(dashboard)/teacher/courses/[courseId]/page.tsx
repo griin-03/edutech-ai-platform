@@ -63,7 +63,13 @@ export default function ExamEditorPage({ params }: { params: Promise<{ courseId:
       const draftData = localStorage.getItem(`ai_draft_questions_${courseId}`);
       if (draftData) {
           try { 
-              setQuestions(JSON.parse(draftData)); 
+              const parsedData = JSON.parse(draftData);
+              // Đảm bảo mỗi câu hỏi đều có trường correct
+              const validatedData = parsedData.map((q: any) => ({
+                ...q,
+                correct: q.correct !== undefined ? q.correct : 0
+              }));
+              setQuestions(validatedData); 
               setIsLoadingDraft(false); 
               return; 
           } catch (e) { console.error("Lỗi đọc nháp"); }
@@ -72,7 +78,12 @@ export default function ExamEditorPage({ params }: { params: Promise<{ courseId:
       try {
           const dbQuestions = await getQuestionsByCourseId(Number(courseId));
           if (dbQuestions && dbQuestions.length > 0) {
-              setQuestions(dbQuestions);
+              // Đảm bảo mỗi câu hỏi đều có trường correct
+              const validatedDbQuestions = dbQuestions.map((q: any) => ({
+                ...q,
+                correct: q.correct !== undefined ? q.correct : 0
+              }));
+              setQuestions(validatedDbQuestions);
           } else {
               setQuestions([]);
           }
@@ -86,19 +97,69 @@ export default function ExamEditorPage({ params }: { params: Promise<{ courseId:
     loadQuestions();
   }, [courseId]);
 
-  const updateQuestionText = (index: number, text: string) => { const newQs = [...questions]; newQs[index].text = text; setQuestions(newQs); };
-  const updateOptionText = (qIndex: number, optIndex: number, text: string) => { const newQs = [...questions]; newQs[qIndex].options[optIndex] = text; setQuestions(newQs); };
-  const setCorrectOption = (qIndex: number, optIndex: number) => { const newQs = [...questions]; newQs[qIndex].correct = optIndex; setQuestions(newQs); };
-  const updateShortAnswers = (qIndex: number, text: string) => { const newQs = [...questions]; newQs[qIndex].correctAnswers = text.split(",").map((s: string) => s.trim()); setQuestions(newQs); };
+  const updateQuestionText = (index: number, text: string) => { 
+    const newQs = [...questions]; 
+    newQs[index].text = text; 
+    setQuestions(newQs); 
+  };
+
+  const updateOptionText = (qIndex: number, optIndex: number, text: string) => { 
+    const newQs = [...questions]; 
+    newQs[qIndex].options[optIndex] = text; 
+    setQuestions(newQs); 
+  };
+
+  const setCorrectOption = (qIndex: number, optIndex: number) => { 
+    // Tạo một bản sao mới của mảng questions
+    const newQs = questions.map((q, idx) => {
+      if (idx === qIndex) {
+        // Tạo bản sao của câu hỏi và cập nhật correct
+        return {
+          ...q,
+          correct: optIndex
+        };
+      }
+      return q;
+    });
+    
+    // Cập nhật state với mảng mới
+    setQuestions(newQs);
+    
+    // Log để debug
+    console.log("Đã chọn đáp án:", optIndex, "cho câu", qIndex);
+    console.log("Questions sau khi cập nhật:", newQs);
+  };
+
+  const updateShortAnswers = (qIndex: number, text: string) => { 
+    const newQs = [...questions]; 
+    newQs[qIndex].correctAnswers = text.split(",").map((s: string) => s.trim()); 
+    setQuestions(newQs); 
+  };
   
   const removeQuestion = (index: number) => { 
-      if(confirm("Xóa câu này?")) { const newQs = [...questions]; newQs.splice(index, 1); setQuestions(newQs); } 
+      if(confirm("Xóa câu này?")) { 
+        const newQs = [...questions]; 
+        newQs.splice(index, 1); 
+        setQuestions(newQs); 
+      } 
   };
   
   const addQuestion = (type: "MULTIPLE_CHOICE" | "SHORT_ANSWER") => {
     const newQs = [...questions];
-    if (type === "MULTIPLE_CHOICE") newQs.push({ type, text: "Câu trắc nghiệm (Gõ công thức vào trong ký hiệu $...$)", options: ["A", "B", "C", "D"], correct: 0 });
-    else newQs.push({ type, text: "Câu tự luận (Gõ công thức vào trong ký hiệu $...$)", correctAnswers: ["đáp án"] });
+    if (type === "MULTIPLE_CHOICE") {
+      newQs.push({ 
+        type, 
+        text: "Câu trắc nghiệm (Gõ công thức vào trong ký hiệu $...$)", 
+        options: ["A", "B", "C", "D"], 
+        correct: 0 
+      });
+    } else {
+      newQs.push({ 
+        type, 
+        text: "Câu tự luận (Gõ công thức vào trong ký hiệu $...$)", 
+        correctAnswers: ["đáp án"] 
+      });
+    }
     setQuestions(newQs);
   };
 
@@ -117,8 +178,13 @@ export default function ExamEditorPage({ params }: { params: Promise<{ courseId:
     try {
         const newQs = await generateExamQuestionsAI("Đề Thi", topic);
         if (newQs.length > 0) {
-            setQuestions(newQs);
-            localStorage.setItem(`ai_draft_questions_${courseId}`, JSON.stringify(newQs));
+            // Đảm bảo mỗi câu hỏi đều có trường correct
+            const validatedNewQs = newQs.map((q: any) => ({
+              ...q,
+              correct: q.correct !== undefined ? q.correct : 0
+            }));
+            setQuestions(validatedNewQs);
+            localStorage.setItem(`ai_draft_questions_${courseId}`, JSON.stringify(validatedNewQs));
             toast.success("Đã nạp bộ đề mới!");
         } else toast.error("AI lỗi. Hãy tạo thủ công.");
     } catch(e) { toast.error("Lỗi mạng."); }
@@ -138,6 +204,11 @@ export default function ExamEditorPage({ params }: { params: Promise<{ courseId:
     } catch (e) { toast.error("Lỗi khi lưu"); } 
     finally { setIsSaving(false); }
   };
+
+  // Debug: Log mỗi khi questions thay đổi
+  useEffect(() => {
+    console.log("Questions updated:", questions);
+  }, [questions]);
 
   if (isLoadingDraft) return <div className="p-20 flex flex-col items-center justify-center text-slate-500"><Loader2 className="w-8 h-8 animate-spin mb-4 text-blue-500" /> Đang tải dữ liệu câu hỏi...</div>;
 
@@ -196,7 +267,21 @@ export default function ExamEditorPage({ params }: { params: Promise<{ courseId:
         
         {questions.map((q: any, qIdx: number) => (
             <Card key={qIdx} className="rounded-3xl border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm relative group overflow-hidden">
-                <button onClick={() => removeQuestion(qIdx)} className="absolute top-6 right-6 text-slate-300 hover:text-red-500 transition-colors z-10"><Trash2 className="w-5 h-5" /></button>
+                <button 
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if(confirm("Xóa câu này?")) { 
+                      const newQs = [...questions]; 
+                      newQs.splice(qIdx, 1); 
+                      setQuestions(newQs); 
+                    }
+                  }} 
+                  className="absolute top-6 right-6 text-slate-300 hover:text-red-500 transition-colors z-10"
+                  type="button"
+                >
+                  <Trash2 className="w-5 h-5" />
+                </button>
                 <CardContent className="p-6 md:p-8">
                     <div className="flex gap-4 mb-6 pr-10">
                         <span className="bg-blue-600 text-white w-12 h-12 rounded-xl flex items-center justify-center font-bold text-xl">{qIdx + 1}</span>
@@ -222,9 +307,21 @@ export default function ExamEditorPage({ params }: { params: Promise<{ courseId:
                         {q.type === "MULTIPLE_CHOICE" && (
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 {q.options?.map((opt: string, optIdx: number) => (
-                                    <div key={optIdx} className={`flex flex-col gap-2 p-3 rounded-xl border-2 transition-all ${q.correct === optIdx ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-500/10' : 'border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900'}`}>
+                                    <div 
+                                      key={optIdx} 
+                                      className={`flex flex-col gap-2 p-3 rounded-xl border-2 transition-all ${q.correct === optIdx ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-500/10' : 'border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900'}`}
+                                    >
                                         <div className="flex items-center gap-3">
-                                            <button onClick={() => setCorrectOption(qIdx, optIdx)} className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 border-2 transition-colors ${q.correct === optIdx ? 'bg-emerald-500 border-emerald-500 text-white' : 'bg-transparent border-slate-300 dark:border-slate-600 text-slate-400'}`}>
+                                            <button 
+                                                type="button"
+                                                className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 border-2 transition-colors cursor-pointer ${q.correct === optIdx ? 'bg-emerald-500 border-emerald-500 text-white' : 'bg-transparent border-slate-300 dark:border-slate-600 text-slate-400'}`}
+                                                onClick={(e) => {
+                                                  e.preventDefault();
+                                                  e.stopPropagation();
+                                                  console.log("Click trên nút, optIdx:", optIdx);
+                                                  setCorrectOption(qIdx, optIdx);
+                                                }}
+                                            >
                                                 <CheckCircle2 className="w-5 h-5" />
                                             </button>
                                             
