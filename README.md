@@ -15,7 +15,19 @@
 </div>
 
 <br />
+## 🔑 Tài khoản Demo (Dành riêng cho Giảng viên chấm thi)
 
+Để thuận tiện cho việc trải nghiệm toàn bộ tính năng của hệ thống mà không cần chờ phê duyệt, kính mời Quý Thầy/Cô sử dụng bộ tài khoản đã được cấp quyền sẵn dưới đây:
+
+**Mật khẩu chung cho tất cả tài khoản:** `123456`
+
+| Phân quyền | Email Đăng nhập | Ghi chú tính năng nổi bật |
+| :--- | :--- | :--- |
+| 👑 **Admin** | `ltt.admin@gmail.com` | Xem Dashboard doanh thu, duyệt tài khoản Giảng viên, quản lý hệ thống. |
+| 👨‍🏫 **Teacher** | `ltt.tea@gmail.com` | Tạo khóa học mới, dùng AI tạo đề thi trắc nghiệm, xem điểm học viên. |
+| 👨‍🎓 **Student** | `ltt.stu@gmail.com` | (Đã có sẵn 1 triệu VNĐ trong ví) Dùng để test tính năng mua khóa học, thi thử và Chat với Gia sư AI. |
+
+👉 **Link Đăng Nhập:** [https://edutech-ai-platform.onrender.com/login](https://edutech-ai-platform.onrender.com/login)
 ## 🌟 Giới Thiệu Dự Án
 
 **EduTech AI** là giải pháp công nghệ giáo dục (EdTech) toàn diện, được xây dựng nhằm mục đích tối ưu hóa trải nghiệm giảng dạy và học tập. Điểm đột phá của dự án là việc tích hợp Trí tuệ nhân tạo (AI) giúp cá nhân hóa lộ trình học, giải đáp thắc mắc tự động (AI Mentor) và hỗ trợ giáo viên soạn đề thi thông minh.
