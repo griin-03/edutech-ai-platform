@@ -44,51 +44,82 @@ export async function createCourse(formData: FormData) {
 }
 
 // ==============================================================================
-// 2. AI GENERATOR: CHUYÊN GIA 12 MÔN THPT QUỐC GIA (ĐÃ MỞ KHÓA LINH HOẠT)
+// 2. AI GENERATOR: CHUYÊN GIA TOÁN (BẤT TỬ JSON VỚI THUẬT TOÁN [SLASH])
 // ==============================================================================
 export async function generateExamQuestionsAI(title: string, topic: string) {
   try {
     if (!process.env.COHERE_API_KEY) throw new Error("Chưa cấu hình COHERE_API_KEY");
 
-    // 🔥 NÂNG CẤP PROMPT: Cho phép AI linh hoạt phân tích Môn học và Số lượng câu hỏi
+    // 🔥 PROMPT KỶ LUẬT THÉP & THUẬT TOÁN [SLASH]
     const prompt = `
-      Bạn là Tổ trưởng Tổ ra đề thi THPT Quốc gia của Bộ Giáo dục & Đào tạo. 
-      Nhiệm vụ: Tạo một bộ đề thi CỰC KỲ CHUYÊN SÂU dựa trên 2 thông tin sau:
-      - Tên đề tài / Môn học: "${title}"
-      - Yêu cầu chi tiết (Độ khó, Số lượng câu, Trắc nghiệm/Tự luận): "${topic}"
+      Bạn là GIÁO SƯ TOÁN HỌC TỐI CAO, tinh thông Toán học từ cấp THPT đến Đại học.
+      LỆNH CẤM TUYỆT ĐỐI: BẠN CHỈ ĐƯỢC PHÉP TẠO ĐỀ THI MÔN TOÁN. Nếu yêu cầu nhắc đến môn khác, hãy bỏ qua và tự động tạo đề Toán.
 
-      YÊU CẦU CHUYÊN MÔN:
-      - Tự động nhận diện chính xác 1 trong 12 môn (Toán, Lý, Hóa, Sinh, Văn, Sử, Địa, GDCD, Anh, Tin, Công nghệ, GDQP) từ Tên đề.
-      - TUYỆT ĐỐI tuân thủ số lượng câu hỏi và cấu trúc (trắc nghiệm/tự luận) được ghi trong "Yêu cầu chi tiết". Nếu người dùng không ghi số lượng, mặc định tạo 10 câu (7 trắc nghiệm, 3 tự luận).
-      - KHÔNG dùng định nghĩa cơ bản. Đề thi phải có tư duy logic, phân tích, suy luận.
-      - BẮT BUỘC SỬ DỤNG LATEX CHO TOÁN/LÝ/HÓA: Công thức bọc trong ký hiệu $. QUAN TRỌNG: Để tránh lỗi cú pháp JSON, bạn PHẢI dùng 2 dấu gạch chéo ngược cho các lệnh LaTeX (Ví dụ: $\\\\frac{a}{b}$, $\\\\sqrt{x}$, $\\\\lim_{x \\\\to 0}$).
+      NHIỆM VỤ CỦA BẠN: Soạn bộ đề thi TOÁN dựa trên:
+      - Ngữ cảnh: "${title}"
+      - Yêu cầu cấu trúc: "${topic}"
 
-      KỶ LUẬT JSON (BẮT BUỘC):
-      1. TRẢ VỀ DUY NHẤT 1 MẢNG JSON. KHÔNG có bất kỳ văn bản markdown (\`\`\`json) hay lời giải thích nào ở ngoài mảng.
-      2. Cấu trúc mảng phải chuẩn xác:
+      QUY TẮC BẮT BUỘC (TUÂN THỦ 100%):
+      1. ĐÚNG SỐ LƯỢNG: Tạo CHÍNH XÁC số lượng câu trắc nghiệm và tự luận được yêu cầu. Không làm thừa hay thiếu. Nếu không rõ, tạo 5 trắc nghiệm, 2 tự luận.
+      
+      2. QUY TẮC TOÁN HỌC (SỐNG CÒN):
+         - Mọi công thức Toán học phải được bọc trong dấu $.
+         - ĐỂ TRÁNH LỖI HỆ THỐNG: BẠN BỊ CẤM SỬ DỤNG DẤU GẠCH CHÉO NGƯỢC (\\). 
+         - HÃY THAY THẾ TOÀN BỘ DẤU (\\) BẰNG TỪ KHÓA "[SLASH]".
+         - VÍ DỤ BẮT BUỘC: 
+           + Thay vì viết $\\frac{1}{2}$, hãy viết $[SLASH]frac{1}{2}$
+           + Thay vì viết $\\sin(x)$, hãy viết $[SLASH]sin(x)$
+           + Thay vì viết $\\int_0^1$, hãy viết $[SLASH]int_0^1$
+           + Thay vì viết $\\sqrt{x}$, hãy viết $[SLASH]sqrt{x}$
+
+      KỶ LUẬT JSON:
+      1. TRẢ VỀ DUY NHẤT 1 MẢNG JSON. Không giải thích, không dùng markdown.
+      2. CẤM XUỐNG DÒNG (ENTER) TRONG CHUỖI.
+      
+      CẤU TRÚC ĐẦU RA BẮT BUỘC:
       [
-        { "type": "MULTIPLE_CHOICE", "text": "Nội dung câu trắc nghiệm...", "options": ["Đáp án A", "Đáp án B", "Đáp án C", "Đáp án D"], "correct": 0 },
-        { "type": "SHORT_ANSWER", "text": "Nội dung câu tự luận...", "correctAnswers": ["đáp án đúng 1", "đáp án đúng 2"] }
+        {
+          "type": "MULTIPLE_CHOICE",
+          "text": "Tính đạo hàm của hàm số $y = [SLASH]sin(x) + x^2$.",
+          "options": ["$[SLASH]cos(x) + 2x$", "$-[SLASH]cos(x) + 2x$", "$[SLASH]sin(x) + 2x$", "$-[SLASH]sin(x) + x$"],
+          "correct": 0
+        },
+        {
+          "type": "SHORT_ANSWER",
+          "text": "Giải phương trình: $2x + 4 = 10$.",
+          "correctAnswers": ["3", "x=3"]
+        }
       ]
     `;
 
-    const chatPromise = cohere.chat({ message: prompt, temperature: 0.5, model: "command-r-08-2024" });
-    const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("AI_TIMEOUT")), 40000)); // Tăng timeout lên 40s vì đề dài hơn
+    const chatPromise = cohere.chat({ 
+      message: prompt, 
+      temperature: 0.1, // Nhiệt độ cực thấp để AI ngoan ngoãn làm theo luật [SLASH]
+      model: "command-r-08-2024" 
+    });
+    
+    const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("AI_TIMEOUT")), 50000)); 
     
     const response = await Promise.race([chatPromise, timeoutPromise]) as any;
 
-    // 🔥 FIX LỖI JSON: Chỉ cắt đúng đoạn mảng [...], bỏ vụ replace lỗi LaTeX
     let text = response.text.trim();
+    
+    // Gọt dũa lấy JSON
     const firstBracket = text.indexOf('[');
     const lastBracket = text.lastIndexOf(']');
     
     if (firstBracket !== -1 && lastBracket !== -1) {
       text = text.substring(firstBracket, lastBracket + 1);
     } else {
-        throw new Error("AI không trả về mảng JSON hợp lệ.");
+        throw new Error("AI không trả về cấu trúc mảng JSON.");
     }
     
-    // Parse thẳng text, AI đã được nhắc dùng \\\\ để escape ở trên
+    // =========================================================================
+    // 🔥 BƯỚC GIẢI CỨU LỊCH SỬ: Dịch [SLASH] trở lại thành dấu gạch chéo ngược an toàn 
+    // trước khi đưa vào lò JSON.parse. Từ nay không bao giờ có lỗi Bad Escaped nữa!
+    // =========================================================================
+    text = text.replace(/\[SLASH\]/g, "\\\\");
+
     return JSON.parse(text);
 
   } catch (error: any) {

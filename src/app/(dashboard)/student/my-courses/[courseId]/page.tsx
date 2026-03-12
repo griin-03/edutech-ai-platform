@@ -37,6 +37,8 @@ export default function ExamPage({ params }: { params: Promise<{ courseId: strin
 
   // 🔥 STATE MỚI: QUẢN LÝ MODAL NỘP BÀI (THAY THẾ CONFIRM LOCALHOST)
   const [showSubmitConfirm, setShowSubmitConfirm] = useState(false);
+  // 🔥 STATE CHỐNG SUBMIT NHIỀU LẦN
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const isLoaded = useRef(false);
 
@@ -178,8 +180,13 @@ export default function ExamPage({ params }: { params: Promise<{ courseId: strin
 
   // 🔥 LOGIC CHẤM ĐIỂM (Tách riêng khỏi nút bấm để gọi từ Modal)
   const processSubmit = async (suspended = false) => {
+    // 🔥 CHỐNG GỬI NHIỀU LẦN
+    if (isSubmitting) return;
+    setIsSubmitting(true);
+    
     setShowSubmitConfirm(false); // Đóng modal
 
+    // Tính điểm cục bộ để hiển thị
     let correct = 0;
     questions.forEach(q => { 
         if (q.type === "SHORT_ANSWER") {
@@ -206,17 +213,46 @@ export default function ExamPage({ params }: { params: Promise<{ courseId: strin
     if (document.exitFullscreen) document.exitFullscreen().catch(()=> {});
 
     try {
-      await fetch("/api/courses", {
+      // 🔥 TẠO OBJECT ANSWERS ĐỂ GỬI LÊN SERVER
+      const answersToSubmit: Record<string, any> = {};
+      
+      // Chỉ gửi những câu đã có đáp án
+      questions.forEach(q => {
+        if (answers[q.id] !== undefined && answers[q.id] !== "") {
+          answersToSubmit[q.id] = answers[q.id];
+        }
+      });
+
+      console.log("📤 Gửi answers lên server:", answersToSubmit);
+
+      // GỬI LÊN SERVER VỚI ĐÚNG FORMAT
+      const response = await fetch("/api/courses", {
         method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
         body: JSON.stringify({ 
             action: "GRADE", 
             courseId: Number(courseId), 
-            scoreFromClient: finalScore,
+            answers: answersToSubmit, // 🔥 QUAN TRỌNG: Gửi answers thay vì scoreFromClient
             violationCount: violations, 
             isSuspended: suspended
         }),
       });
-    } catch(e) { console.error(e); }
+
+      const data = await response.json();
+      console.log("📥 Kết quả từ server:", data);
+
+      // Nếu server trả về điểm khác, cập nhật lại
+      if (data.calculatedScore !== undefined && data.calculatedScore !== finalScore) {
+        setScore(data.calculatedScore);
+      }
+
+    } catch(e) { 
+      console.error("Lỗi khi gửi kết quả:", e);
+    } finally {
+      setIsSubmitting(false);
+    }
     
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
@@ -486,9 +522,19 @@ export default function ExamPage({ params }: { params: Promise<{ courseId: strin
                         {!submitted ? (
                             <Button 
                                 onClick={handleRequestSubmit} 
-                                className="w-full h-14 text-base font-medium bg-slate-900 text-white hover:bg-black shadow-lg rounded-full transition-transform hover:scale-[1.02]"
+                                disabled={isSubmitting}
+                                className="w-full h-14 text-base font-medium bg-slate-900 text-white hover:bg-black shadow-lg rounded-full transition-transform hover:scale-[1.02] disabled:opacity-50 disabled:cursor-not-allowed"
                             >
-                                <Save className="mr-2 w-5 h-5"/> NỘP BÀI NGAY
+                                {isSubmitting ? (
+                                    <>
+                                        <span className="mr-2 w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"/>
+                                        ĐANG XỬ LÝ...
+                                    </>
+                                ) : (
+                                    <>
+                                        <Save className="mr-2 w-5 h-5"/> NỘP BÀI NGAY
+                                    </>
+                                )}
                             </Button>
                         ) : (
                             <div className="space-y-3">
@@ -527,9 +573,10 @@ export default function ExamPage({ params }: { params: Promise<{ courseId: strin
                         </Button>
                         <Button 
                             onClick={() => processSubmit(false)} 
+                            disabled={isSubmitting}
                             className="flex-1 h-12 rounded-xl font-bold bg-amber-500 hover:bg-amber-600 text-white shadow-lg"
                         >
-                            Vẫn nộp bài
+                            {isSubmitting ? "Đang xử lý..." : "Vẫn nộp bài"}
                         </Button>
                     </div>
                 </Card>
