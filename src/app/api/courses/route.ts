@@ -14,16 +14,18 @@ export async function GET(req: Request) {
     const q = searchParams.get("q");
     const category = searchParams.get("category");
 
-    // 1. Điều kiện lọc cơ bản
-    let whereCondition: any = {};
+    // 1. Điều kiện lọc cơ bản (Học sinh chỉ thấy đề đã được duyệt)
+    let whereCondition: any = {
+      isPublished: true,
+      approvalStatus: "APPROVED"
+    };
     
-    // Tìm kiếm tương đối (không phân biệt hoa thường nếu DB hỗ trợ)
+    // Tìm kiếm tương đối
     if (q) whereCondition.title = { contains: q };
     if (category && category !== "All") whereCondition.category = category;
 
     // 2. LOGIC TÁCH DỮ LIỆU
     if (mode === "mine") {
-      // Nếu chưa đăng nhập mà đòi xem "Của tôi" -> Trả về rỗng ngay (Tránh lỗi Prisma)
       if (!userEmail) return NextResponse.json([]);
 
       whereCondition.savedCourses = {
@@ -31,8 +33,6 @@ export async function GET(req: Request) {
       };
     } 
     else if (mode === "challenge") {
-      // Chỉ lấy đề Online/Pro
-      // Lưu ý: Đảm bảo trong DB cột format có giá trị này, nếu không hãy comment lại để test
       whereCondition.format = "ONLINE"; 
     }
 
@@ -40,12 +40,18 @@ export async function GET(req: Request) {
       where: whereCondition,
       orderBy: { createdAt: 'desc' },
       include: {
-        // Lấy thông tin đã lưu chưa (chỉ khi đã đăng nhập)
+        author: { select: { name: true } },
+        _count: { select: { questions: true } },
+        
+        // Cần thiết để trang thi lấy được câu hỏi
+        questions: {
+            orderBy: { position: 'asc' }
+        },
+
         savedCourses: userEmail ? {
           where: { user: { email: userEmail } }
         } : false,
         
-        // Lấy điểm thi cao nhất (chỉ khi đã đăng nhập)
         examResults: userEmail ? {
           where: { user: { email: userEmail } },
           select: { score: true }
@@ -55,7 +61,7 @@ export async function GET(req: Request) {
 
     return NextResponse.json(courses);
   } catch (error) {
-    console.error("GET COURSE ERROR:", error); // In lỗi ra terminal để dễ sửa
+    console.error("GET COURSE ERROR:", error); 
     return NextResponse.json({ error: "Lỗi Server khi tải khóa học" }, { status: 500 });
   }
 }
@@ -68,10 +74,7 @@ export async function POST(req: Request) {
         const body = await req.json();
         const { action } = body;
         
-        // 🔥 QUAN TRỌNG: Ép kiểu courseId sang số (Int)
-        // Vì DB mới của bạn ID là số, nhưng Frontend gửi lên là String
         const courseId = Number(body.courseId);
-
         if (isNaN(courseId)) {
             return NextResponse.json({ error: "Invalid Course ID" }, { status: 400 });
         }
@@ -79,13 +82,12 @@ export async function POST(req: Request) {
         const user = await prisma.user.findUnique({ where: { email: session.user.email } });
         if (!user) return NextResponse.json({ error: "User not found" }, { status: 404 });
 
+        // ==============================================================================
+        // ACTION 1: LƯU KHÓA HỌC (TẢI ĐỀ)
+        // ==============================================================================
         if (action === "SAVE_COURSE") {
-           // Kiểm tra xem đã lưu chưa để tránh lỗi duplicate
            const existingSave = await prisma.savedCourse.findFirst({
-               where: {
-                   userId: user.id,
-                   courseId: courseId
-               }
+               where: { userId: user.id, courseId: courseId }
            });
 
            if (!existingSave) {
@@ -93,7 +95,6 @@ export async function POST(req: Request) {
                    data: { userId: user.id, courseId: courseId }
                });
                
-               // Tăng lượt tải
                await prisma.course.update({
                    where: { id: courseId },
                    data: { downloads: { increment: 1 } }
@@ -103,10 +104,83 @@ export async function POST(req: Request) {
            return NextResponse.json({ success: true });
         }
 
+        // ==============================================================================
+        // ACTION 2: NỘP BÀI, TỰ ĐỘNG CHẤM ĐIỂM (BẢO MẬT) VÀ BÁO CÁO GIAN LẬN
+        // ==============================================================================
+        if (action === "GRADE") {
+            // 🔥 THAY ĐỔI: Chỉ nhận answers (đáp án học sinh chọn) từ Frontend
+            const { answers, violationCount, isSuspended } = body;
+            
+            let finalScore = 0;
+
+            // 1. Tự động chấm điểm (Lấy đáp án gốc từ DB để so sánh)
+            const course = await prisma.course.findUnique({
+                where: { id: courseId },
+                include: { questions: true }
+            });
+
+            if (course && course.questions && course.questions.length > 0) {
+                let correctCount = 0;
+                
+                course.questions.forEach((q) => {
+                    if (q.type === "SHORT_ANSWER") {
+                        const userAns = (answers[q.id] || "").toString().trim().toLowerCase();
+                        let correctArr: string[] = [];
+                        
+                        // Xử lý mảng đáp án Tự luận an toàn
+                        if (Array.isArray(q.correctAnswers)) {
+                            correctArr = q.correctAnswers as string[];
+                        } else if (typeof q.correctAnswers === 'string') {
+                            try { 
+                                correctArr = JSON.parse(q.correctAnswers); 
+                            } catch(e) { 
+                                correctArr = q.correctAnswers.split(','); 
+                            }
+                        }
+                        
+                        const isMatch = correctArr.some((ans: string) => ans.trim().toLowerCase() === userAns);
+                        if (isMatch) correctCount++;
+                    } else {
+                        // So sánh câu Trắc nghiệm
+                        if (answers[q.id] === q.correct) correctCount++; 
+                    }
+                });
+
+                // Tính điểm thang 10 chuẩn xác
+                finalScore = (correctCount / course.questions.length) * 10;
+            }
+
+            // 2. Lưu kết quả thi vào Database với số điểm MÁY CHỦ tự tính
+            const result = await prisma.examResult.create({
+                data: {
+                    userId: user.id,
+                    courseId: courseId,
+                    score: finalScore,
+                    violationCount: violationCount || 0,
+                    isSuspended: isSuspended || false,
+                }
+            });
+
+            // 3. 🚨 BÁO CÁO GIAN LẬN CHO GIÁO VIÊN
+            if ((violationCount > 0 || isSuspended) && course) {
+                await prisma.notification.create({
+                    data: {
+                        userId: course.authorId, 
+                        type: "WARNING",
+                        message: `⚠️ Cảnh báo: Học viên ${user.name || user.email} đã vi phạm quy chế ${violationCount} lần (Đình chỉ: ${isSuspended ? "Có" : "Không"}) khi thi bài "${course.title}".`,
+                        link: `/teacher/analytics` 
+                    }
+                });
+            }
+
+            // Trả về điểm thật cho Frontend hiển thị lên màn hình
+            return NextResponse.json({ success: true, result, calculatedScore: finalScore });
+        }
+
         return NextResponse.json({ error: "Invalid Action" }, { status: 400 });
 
     } catch (error) {
-        console.error("POST COURSE ERROR:", error); // Quan trọng: Xem lỗi gì ở Terminal
-        return NextResponse.json({ error: "Lỗi Server khi lưu khóa học" }, { status: 500 });
+        console.error("POST COURSE ERROR:", error);
+        return NextResponse.json({ error: "Lỗi Server khi xử lý dữ liệu" }, { status: 500 });
     }
 }

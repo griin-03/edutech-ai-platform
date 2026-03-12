@@ -13,94 +13,106 @@ export async function POST(req: Request) {
     const body = await req.json();
     const { action, scoreFromClient } = body;
 
-    // 🔥 FIX QUAN TRỌNG NHẤT: Ép kiểu courseId từ String sang Int
-    // Database mới của bạn id là số, nếu để string prisma sẽ báo lỗi
     const courseId = Number(body.courseId);
 
     if (isNaN(courseId)) {
         return NextResponse.json({ error: "Invalid Course ID (Phải là số)" }, { status: 400 });
     }
 
-    // 1. GENERATE (TẠO ĐỀ THI VỚI CƠ CHẾ RETRY)
+    // 1. GENERATE (TẠO ĐỀ THI TRẮC NGHIỆM & TỰ LUẬN)
     if (action === "GENERATE") {
       if (!process.env.COHERE_API_KEY) {
         return NextResponse.json({ error: "Server thiếu COHERE_API_KEY" }, { status: 500 });
       }
 
-      // Lúc này courseId đã là số, findUnique sẽ chạy mượt mà
       const course = await prisma.course.findUnique({ where: { id: courseId } });
       if (!course) return NextResponse.json({ error: "Khóa học không tồn tại" }, { status: 404 });
 
       console.log(`>> [Cohere] Đang tạo đề cho: ${course.title}...`);
 
+      // 🌟 PROMPT MỚI: TẬP TRUNG CHUYÊN MÔN, CHIA LÀM 2 LOẠI CÂU HỎI
       const prompt = `
-        You are an expert exam creator.
-        Task: Create 10 multiple-choice questions for the course "${course.title}" (Level: ${course.level}).
+        Đóng vai là một Chuyên gia khảo thí cấp cao của Bộ Giáo dục và Đào tạo Việt Nam.
+        Nhiệm vụ: Tạo một bộ đề thi gồm 10 câu hỏi (7 câu trắc nghiệm, 3 câu tự luận ngắn điền từ) cho khóa học "${course.title}" (Cấp độ: ${course.level}).
+
+        YÊU CẦU NGHIÊM NGẶT VỀ NỘI DUNG (BỎ QUA TẠO ẢNH):
+        1. Câu trắc nghiệm (MULTIPLE_CHOICE): Gồm 4 đáp án, chỉ 1 đáp án đúng.
+        2. Câu tự luận ngắn (SHORT_ANSWER): Câu hỏi yêu cầu điền 1 từ, cụm từ ngắn hoặc 1 con số. BẮT BUỘC cung cấp một mảng các đáp án có thể chấp nhận được (đồng nghĩa, viết tắt hợp lý, sai khác nhỏ) để hệ thống chấm điểm tự động. Ví dụ: ["ReactJS", "React JS", "React"].
         
-        STRICT OUTPUT RULES:
-        1. Return ONLY valid JSON array.
+        STRICT TECHNICAL RULES (VIOLATION CAUSES SERVER CRASH):
+        1. Return ONLY a valid JSON array. NO greetings, NO explanations.
         2. Do NOT use backslashes (\\) inside strings. Use forward slashes (/) if needed.
         3. Do NOT use Markdown formatting (no \`\`\`json).
-        4. "correct" must be an integer index (0-3).
         
-        JSON Structure:
+        BẮT BUỘC TUÂN THỦ CẤU TRÚC JSON SAU MỘT CÁCH NGHIÊM NGẶT:
         [
           {
             "id": 1,
-            "text": "Question content without special characters?",
-            "options": ["A", "B", "C", "D"],
-            "correct": 0,
-            "imageKeyword": "simple noun"
+            "type": "MULTIPLE_CHOICE",
+            "text": "Nội dung câu hỏi trắc nghiệm?",
+            "options": ["Đáp án A", "Đáp án B", "Đáp án C", "Đáp án D"],
+            "correct": 0
+          },
+          {
+            "id": 2,
+            "type": "SHORT_ANSWER",
+            "text": "Nội dung câu hỏi điền từ ngắn?",
+            "correctAnswers": ["đáp án chuẩn", "đáp án đồng nghĩa 1", "đáp án đồng nghĩa 2"]
           }
         ]
       `;
 
-      // HÀM RETRY: Tự động thử lại 3 lần nếu lỗi JSON
       const generateQuestions = async (retryCount = 0): Promise<any> => {
         try {
           const response = await cohere.chat({
-            model: "command-r-08-2024", // Model ổn định nhất
+            model: "command-r-08-2024", 
             message: prompt,
-            temperature: 0.4 + (retryCount * 0.1), // Tăng độ sáng tạo nếu thử lại
+            temperature: 0.4 + (retryCount * 0.1), 
           });
 
           let text = response.text;
-
-          // 1. Lọc bỏ Markdown
           text = text.replace(/```json/g, "").replace(/```/g, "").trim();
           
-          // 2. Cắt lấy đúng đoạn Array [...]
           const firstBracket = text.indexOf("[");
           const lastBracket = text.lastIndexOf("]");
           if (firstBracket !== -1 && lastBracket !== -1) {
               text = text.substring(firstBracket, lastBracket + 1);
           }
 
-          // 3. Sửa lỗi "Bad escaped character" (Thay thế \ bằng /)
           text = text.replace(/\\/g, "/"); 
-
           const questions = JSON.parse(text);
 
-          // Validate dữ liệu
           if (!Array.isArray(questions) || questions.length < 5) {
              throw new Error("Dữ liệu không đủ hoặc sai định dạng");
           }
 
-          return questions.slice(0, 10).map((q: any, i: number) => ({
-            id: i + 1,
-            text: q.text,
-            options: q.options,
-            correct: q.correct,
-            imageKeyword: q.imageKeyword || "technology"
-          }));
+          // Phân loại và map dữ liệu chuẩn xác trước khi gửi về Frontend
+          return questions.slice(0, 10).map((q: any, i: number) => {
+            if (q.type === "SHORT_ANSWER") {
+              return {
+                id: i + 1,
+                type: "SHORT_ANSWER",
+                text: q.text,
+                correctAnswers: q.correctAnswers || []
+              };
+            }
+            // Mặc định là trắc nghiệm
+            return {
+              id: i + 1,
+              type: "MULTIPLE_CHOICE",
+              text: q.text,
+              options: q.options || [],
+              correct: q.correct !== undefined ? q.correct : 0
+            };
+          });
 
         } catch (err: any) {
           console.error(`>> Lỗi lần ${retryCount + 1}:`, err.message);
-          if (retryCount < 2) { // Thử lại tối đa 2 lần nữa
+          if (retryCount < 2) { 
              console.log(">> Đang thử lại...");
              return await generateQuestions(retryCount + 1);
           }
-          throw err; // Nếu quá 3 lần thì mới báo lỗi ra ngoài
+          throw err; 
         }
       };
 
@@ -125,7 +137,7 @@ export async function POST(req: Request) {
           score: parseFloat(scoreFromClient),
           feedback: scoreFromClient >= 5 ? "Đạt" : "Cần cố gắng",
           userId: user.id,
-          courseId: courseId // Sử dụng courseId đã ép kiểu số
+          courseId: courseId 
         }
       });
       return NextResponse.json({ success: true });

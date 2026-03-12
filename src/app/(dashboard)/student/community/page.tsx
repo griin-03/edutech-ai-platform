@@ -18,9 +18,10 @@ import {
 import { 
   Search, Filter, Plus, Heart, MessageCircle, Share2, MoreHorizontal, 
   Flag, Star, TrendingUp, Users, Zap, MessageSquare, FileText, 
-  HelpCircle, Flame, ChevronLeft, ChevronRight, Loader2, Send, CornerDownRight
+  HelpCircle, Flame, ChevronLeft, ChevronRight, Loader2, Send, CornerDownRight, Crown
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import Link from "next/link"; 
 
 // --- CÁC COMPONENT PHỤ ---
 const POST_TYPES = [
@@ -39,33 +40,49 @@ const PostTypeBadge = ({ type }: { type: string }) => {
 };
 
 // --- COMPONENT HIỂN THỊ BÌNH LUẬN ---
-const CommentItem = ({ comment, onReply }: { comment: any, onReply: (user: string, id: string) => void }) => (
-    <div className="flex gap-3 text-sm group">
-        <Avatar className="h-8 w-8 mt-1">
-            <AvatarImage src={comment.user?.avatar} />
-            <AvatarFallback>{comment.user?.name?.[0]}</AvatarFallback>
-        </Avatar>
-        <div className="flex-1">
-            <div className="bg-stone-100 dark:bg-stone-800 rounded-2xl px-3 py-2 w-fit">
-                <p className="font-bold text-stone-800 dark:text-stone-200 text-xs">{comment.user?.name}</p>
-                <p className="text-stone-600 dark:text-stone-300 mt-0.5">{comment.content}</p>
+const CommentItem = ({ comment, onReply }: { comment: any, onReply: (user: string, id: string) => void }) => {
+    // 🔥 NHẬN DIỆN NGƯỜI BÌNH LUẬN LÀ PRO HAY KHÔNG
+    const isCommenterPro = comment.user?.isPro === true; 
+
+    return (
+        <div className="flex gap-3 text-sm group">
+            {/* AVATAR BÌNH LUẬN (Có viền Vàng nếu là Pro) */}
+            <div className={cn("relative rounded-full p-0.5 mt-1 shrink-0", isCommenterPro ? "bg-gradient-to-tr from-amber-400 to-yellow-600 shadow-sm" : "bg-transparent")}>
+                <Avatar className="h-8 w-8 border border-white dark:border-stone-900">
+                    <AvatarImage src={comment.user?.avatar} />
+                    <AvatarFallback>{comment.user?.name?.[0]}</AvatarFallback>
+                </Avatar>
+                {isCommenterPro && <div className="absolute -top-1 -right-1 bg-white dark:bg-stone-900 rounded-full p-0.5"><Crown className="w-3 h-3 text-amber-500 fill-amber-500"/></div>}
             </div>
-            <div className="flex gap-3 mt-1 ml-2">
-                <button className="text-[10px] font-bold text-stone-500 hover:text-amber-600 cursor-pointer">Thích</button>
-                <button 
-                    onClick={() => onReply(comment.user?.name, comment.id)} // Truyền ID cha để trả lời
-                    className="text-[10px] font-bold text-stone-500 hover:text-amber-600 cursor-pointer"
-                >
-                    Trả lời
-                </button>
-                <span className="text-[10px] text-stone-400">{new Date(comment.createdAt).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</span>
+
+            <div className="flex-1">
+                <div className="bg-stone-100 dark:bg-stone-800 rounded-2xl px-3 py-2 w-fit">
+                    <div className="flex items-center gap-1.5 mb-0.5">
+                        <p className="font-bold text-stone-800 dark:text-stone-200 text-xs">{comment.user?.name}</p>
+                        {isCommenterPro && <Badge className="bg-amber-100 text-amber-700 hover:bg-amber-100 border-none px-1 py-0 text-[8px] h-3 uppercase font-black"><Crown size={8} className="mr-0.5"/> Pro</Badge>}
+                    </div>
+                    <p className="text-stone-600 dark:text-stone-300">{comment.content}</p>
+                </div>
+                <div className="flex gap-3 mt-1 ml-2">
+                    <button className="text-[10px] font-bold text-stone-500 hover:text-amber-600 cursor-pointer">Thích</button>
+                    <button 
+                        onClick={() => onReply(comment.user?.name, comment.id)} 
+                        className="text-[10px] font-bold text-stone-500 hover:text-amber-600 cursor-pointer"
+                    >
+                        Trả lời
+                    </button>
+                    <span className="text-[10px] text-stone-400">{new Date(comment.createdAt).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</span>
+                </div>
             </div>
         </div>
-    </div>
-);
+    );
+};
 
 export default function CommunityPage() {
   const { data: session } = useSession();
+  
+  // 🔥 KIỂM TRA QUYỀN PRO CỦA BẢN THÂN
+  const isCurrentUserPro = (session?.user as any)?.isPro === true;
   
   // STATE CHÍNH
   const [posts, setPosts] = useState<any[]>([]);
@@ -81,16 +98,14 @@ export default function CommunityPage() {
   const [newPostCategory, setNewPostCategory] = useState("DISCUSSION");
   const [isPosting, setIsPosting] = useState(false);
 
-  // STATE BÌNH LUẬN (QUAN TRỌNG)
-  const [activeCommentPostId, setActiveCommentPostId] = useState<string | null>(null); // Bài viết đang mở comment
-  const [commentsData, setCommentsData] = useState<Record<string, any[]>>({}); // Cache comment theo postId
+  const [activeCommentPostId, setActiveCommentPostId] = useState<string | null>(null); 
+  const [commentsData, setCommentsData] = useState<Record<string, any[]>>({}); 
   const [commentsLoading, setCommentsLoading] = useState<Record<string, boolean>>({});
   
   const [commentContent, setCommentContent] = useState("");
-  const [replyTo, setReplyTo] = useState<{name: string, id: string} | null>(null); // Đang trả lời ai?
+  const [replyTo, setReplyTo] = useState<{name: string, id: string} | null>(null); 
   const [isCommenting, setIsCommenting] = useState(false);
 
-  // 1. FETCH BÀI VIẾT
   useEffect(() => { fetchPosts(); }, [activeTab, searchTerm]);
 
   const fetchPosts = async () => {
@@ -106,16 +121,14 @@ export default function CommunityPage() {
     finally { setLoading(false); }
   };
 
-  // 2. FETCH BÌNH LUẬN (Khi bấm mở)
   const loadComments = async (postId: string) => {
       if (activeCommentPostId === postId) {
-          setActiveCommentPostId(null); // Đóng nếu đang mở
+          setActiveCommentPostId(null); 
           return;
       }
       setActiveCommentPostId(postId);
-      setReplyTo(null); // Reset reply state
+      setReplyTo(null); 
       
-      // Nếu chưa có data thì mới fetch
       if (!commentsData[postId]) {
           setCommentsLoading(prev => ({...prev, [postId]: true}));
           try {
@@ -127,7 +140,6 @@ export default function CommunityPage() {
       }
   };
 
-  // 3. GỬI BÌNH LUẬN / TRẢ LỜI
   const handleSendComment = async (postId: string) => {
     if (!commentContent.trim()) return;
     setIsCommenting(true);
@@ -139,26 +151,22 @@ export default function CommunityPage() {
                 action: "CREATE_COMMENT", 
                 postId, 
                 content: commentContent,
-                parentId: replyTo?.id || null // Gửi kèm ID cha nếu đang trả lời
+                parentId: replyTo?.id || null 
             })
         });
         
         const newComment = await res.json();
         if (newComment.id) {
-            // Cập nhật UI ngay lập tức
             setPosts(prev => prev.map(p => p.id === postId ? { ...p, commentCount: p.commentCount + 1 } : p));
             
-            // Thêm comment vào list
             setCommentsData(prev => {
                 const currentComments = prev[postId] || [];
                 if (replyTo?.id) {
-                    // Nếu là reply, tìm cha và push vào mảng replies của nó
                     return {
                         ...prev,
                         [postId]: currentComments.map(c => c.id === replyTo.id ? {...c, replies: [...(c.replies || []), newComment]} : c)
                     };
                 } else {
-                    // Nếu là comment gốc, push lên đầu
                     return {...prev, [postId]: [newComment, ...currentComments]};
                 }
             });
@@ -170,7 +178,6 @@ export default function CommunityPage() {
     finally { setIsCommenting(false); }
   };
 
-  // CÁC HÀM KHÁC (LIKE, POST...)
   const handleLike = async (postId: string) => {
     setPosts(prev => prev.map(p => p.id === postId ? { ...p, isLiked: !p.isLiked, likeCount: p.isLiked ? p.likeCount - 1 : p.likeCount + 1 } : p));
     try { await fetch("/api/community/posts", { method: "POST", body: JSON.stringify({ action: "TOGGLE_LIKE", postId }) }); } catch (error) {}
@@ -183,7 +190,7 @@ export default function CommunityPage() {
         const res = await fetch("/api/community/posts", { method: "POST", body: JSON.stringify({ action: "CREATE_POST", content: newPostContent, category: newPostCategory }) });
         const newPost = await res.json();
         if (newPost.id) {
-            fetchPosts(); // Reload lại feed
+            fetchPosts(); 
             setNewPostContent("");
             setIsPostDialogOpen(false);
         }
@@ -197,7 +204,8 @@ export default function CommunityPage() {
   }, [posts, sortOrder]);
 
   return (
-    <div className="flex h-[calc(100vh-8rem)] w-full overflow-hidden bg-[#fdfbf7] dark:bg-[#0c0a09] transition-colors duration-500 rounded-3xl border border-stone-200 dark:border-stone-800 shadow-2xl relative">
+    // 🔥 ĐÃ MỞ RỘNG CHIỀU CAO XUỐNG SÁT VIỀN (h-[calc(100vh-2rem)])
+    <div className="flex h-[calc(100vh-2rem)] w-full overflow-hidden bg-[#fdfbf7] dark:bg-[#0c0a09] transition-colors duration-500 rounded-3xl border border-stone-200 dark:border-stone-800 shadow-2xl relative">
       
       {/* 1. LEFT SIDEBAR */}
       <div className={cn("border-r border-stone-200 dark:border-stone-800 bg-[#fdfbf7]/90 dark:bg-[#151311]/90 backdrop-blur-xl shrink-0 flex flex-col transition-all duration-300 ease-in-out", isSidebarOpen ? "w-64 opacity-100" : "w-0 opacity-0 overflow-hidden border-none")}>
@@ -211,12 +219,26 @@ export default function CommunityPage() {
              ))}
            </div>
         </div>
+        
+        {/* 🔥 THÔNG BÁO TÀI KHOẢN PRO Ở LEFT SIDEBAR */}
         <div className="mt-auto p-6 shrink-0">
-           <div className="bg-gradient-to-br from-amber-500 to-orange-600 rounded-2xl p-4 text-white shadow-lg shadow-orange-500/20 whitespace-nowrap overflow-hidden">
-              <p className="font-bold text-sm mb-1">Tham gia Premium</p>
-              <p className="text-xs opacity-90 mb-3">Đăng bài không giới hạn.</p>
-              <Button size="sm" variant="secondary" className="w-full text-xs font-bold text-amber-700">Nâng cấp ngay</Button>
-           </div>
+           {isCurrentUserPro ? (
+               <div className="bg-gradient-to-br from-amber-100 to-amber-50 dark:from-amber-950/40 dark:to-stone-900 border border-amber-200 dark:border-amber-800 rounded-2xl p-4 text-amber-900 dark:text-amber-100 shadow-sm whitespace-nowrap overflow-hidden text-center relative">
+                  <div className="absolute top-0 right-0 p-2 opacity-20"><Crown size={40}/></div>
+                  <Crown className="w-8 h-8 mx-auto text-amber-500 fill-amber-500 mb-2 drop-shadow-sm" />
+                  <p className="font-black text-sm mb-1 uppercase tracking-wider text-amber-600 dark:text-amber-400">Tài Khoản PRO</p>
+                  <p className="text-xs font-medium opacity-80">Đăng bài & Tải tài liệu không giới hạn.</p>
+               </div>
+           ) : (
+               <div className="bg-gradient-to-br from-stone-900 to-stone-800 dark:from-stone-800 dark:to-stone-900 rounded-2xl p-4 text-white shadow-lg whitespace-nowrap overflow-hidden text-center">
+                  <Crown className="w-6 h-6 mx-auto text-amber-400 mb-2 opacity-80" />
+                  <p className="font-bold text-sm mb-1 text-amber-400">Tham gia Premium</p>
+                  <p className="text-xs opacity-70 mb-3 text-stone-300">Nhận huy hiệu & Không giới hạn.</p>
+                  <Link href="/student/pro">
+                      <Button size="sm" className="w-full text-xs font-bold bg-amber-500 hover:bg-amber-600 text-stone-900 shadow-md">Nâng cấp ngay</Button>
+                  </Link>
+               </div>
+           )}
         </div>
       </div>
 
@@ -249,17 +271,36 @@ export default function CommunityPage() {
            <ScrollArea className="h-full w-full px-4 sm:px-0">
               <div className="max-w-3xl mx-auto p-4 sm:p-6 space-y-6 pb-20">
                  {loading ? Array.from({length:3}).map((_, i) => <div key={i} className="bg-white p-6 rounded-xl border border-stone-200 space-y-4 animate-pulse h-40"></div>) 
-                 : displayedPosts.length > 0 ? displayedPosts.map((post, index) => (
+                 : displayedPosts.length > 0 ? displayedPosts.map((post, index) => {
+                     // 🔥 KIỂM TRA TÁC GIẢ BÀI ĐĂNG CÓ PHẢI LÀ PRO KHÔNG
+                     const isPostAuthorPro = post.user?.isPro === true;
+
+                     return (
                      <Card key={post.id} className="border-stone-200 dark:border-stone-800 bg-white dark:bg-[#1c1917] hover:shadow-lg transition-all">
                        <CardHeader className="flex flex-row items-start justify-between pb-3 p-4 sm:p-6">
-                          <div className="flex gap-3">
-                             <Avatar><AvatarImage src={post.user?.avatar} /><AvatarFallback>{post.user?.name?.[0]}</AvatarFallback></Avatar>
+                          <div className="flex gap-3 items-center">
+                             
+                             {/* AVATAR NGƯỜI ĐĂNG BÀI (Có viền PRO) */}
+                             <div className={cn("relative rounded-full p-0.5 shrink-0", isPostAuthorPro ? "bg-gradient-to-tr from-amber-400 to-yellow-600 shadow-md shadow-amber-500/20" : "bg-transparent")}>
+                                <Avatar className="h-10 w-10 border-2 border-white dark:border-stone-900">
+                                   <AvatarImage src={post.user?.avatar} />
+                                   <AvatarFallback>{post.user?.name?.[0]}</AvatarFallback>
+                                </Avatar>
+                                {isPostAuthorPro && <div className="absolute -top-1.5 -right-1.5 bg-white dark:bg-stone-900 rounded-full p-0.5 shadow-sm"><Crown className="w-3.5 h-3.5 text-amber-500 fill-amber-500"/></div>}
+                             </div>
+
                              <div>
-                                <div className="flex items-center gap-2 flex-wrap">
+                                <div className="flex items-center gap-2 flex-wrap mb-0.5">
                                    <h4 className="font-bold text-sm text-stone-800 dark:text-stone-100">{post.user?.name}</h4>
-                                   <Badge variant="secondary" className="text-[10px] h-5 px-1.5 bg-stone-100 text-stone-500">{post.user?.role || "Member"}</Badge>
+                                   
+                                   {/* DANH HIỆU PRO CHO NGƯỜI ĐĂNG */}
+                                   {isPostAuthorPro ? (
+                                       <Badge className="bg-gradient-to-r from-amber-400 to-amber-500 text-stone-900 hover:from-amber-500 hover:to-amber-600 border-none px-1.5 py-0 text-[9px] h-4 font-black uppercase tracking-wider shadow-sm"><Crown size={10} className="mr-0.5"/> Pro Member</Badge>
+                                   ) : (
+                                       <Badge variant="secondary" className="text-[10px] h-4 px-1.5 bg-stone-100 text-stone-500">{post.user?.role || "Member"}</Badge>
+                                   )}
                                 </div>
-                                <p className="text-xs text-stone-400 mt-0.5">{new Date(post.createdAt).toLocaleDateString('vi-VN')}</p>
+                                <p className="text-xs text-stone-400">{new Date(post.createdAt).toLocaleDateString('vi-VN')}</p>
                              </div>
                           </div>
                           <Button variant="ghost" size="icon" className="text-stone-400 -mr-2"><MoreHorizontal size={18}/></Button>
@@ -307,9 +348,16 @@ export default function CommunityPage() {
                                       )}
                                   </div>
 
-                                  {/* Input Field */}
-                                  <div className="flex gap-3 items-end">
-                                      <Avatar className="h-8 w-8"><AvatarImage src={session?.user?.image || ""} /><AvatarFallback>ME</AvatarFallback></Avatar>
+                                  {/* Input Field (Thêm Avatar PRO của BẢN THÂN) */}
+                                  <div className="flex gap-3 items-end pt-2 border-t border-stone-100 dark:border-stone-800 mt-2">
+                                      <div className={cn("relative rounded-full p-0.5 shrink-0", isCurrentUserPro ? "bg-gradient-to-tr from-amber-400 to-yellow-600 shadow-sm" : "bg-transparent")}>
+                                          <Avatar className="h-8 w-8 border border-white dark:border-stone-900">
+                                              <AvatarImage src={session?.user?.image || ""} />
+                                              <AvatarFallback>ME</AvatarFallback>
+                                          </Avatar>
+                                          {isCurrentUserPro && <div className="absolute -top-1 -right-1 bg-white dark:bg-stone-900 rounded-full p-0.5 shadow-sm"><Crown className="w-3 h-3 text-amber-500 fill-amber-500"/></div>}
+                                      </div>
+
                                       <div className="flex-1 relative">
                                           {replyTo && (
                                               <div className="text-[10px] text-blue-600 mb-1 flex justify-between bg-blue-50 px-2 py-1 rounded">
@@ -323,7 +371,7 @@ export default function CommunityPage() {
                                                 onChange={(e) => setCommentContent(e.target.value)}
                                                 onKeyDown={(e) => e.key === 'Enter' && handleSendComment(post.id)}
                                                 placeholder={replyTo ? "Viết câu trả lời..." : "Viết bình luận..."} 
-                                                className="pr-10 h-10 text-sm bg-stone-50 rounded-2xl"
+                                                className="pr-10 h-10 text-sm bg-stone-50 dark:bg-stone-900 border-stone-200 dark:border-stone-800 rounded-2xl focus-visible:ring-amber-500"
                                                 disabled={isCommenting}
                                               />
                                               <button onClick={() => handleSendComment(post.id)} disabled={isCommenting} className="absolute right-3 top-1/2 -translate-y-1/2 text-amber-600 hover:text-amber-700 disabled:opacity-50">
@@ -336,7 +384,8 @@ export default function CommunityPage() {
                           )}
                        </CardFooter>
                      </Card>
-                   ))
+                   )
+                 })
                  : (
                    <div className="text-center py-20">
                       <p className="text-stone-500 font-medium">Chưa có bài viết nào.</p>

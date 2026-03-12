@@ -12,9 +12,11 @@ export async function getPendingUpgrades() {
   });
 }
 
-// DUYỆT ĐƠN: Cập nhật Request -> Update User thành Pro -> Gửi thông báo
-export async function approveUpgrade(requestId: string, userId: number) {
+// DUYỆT ĐƠN: Cập nhật Request -> Update User (Role hoặc Pro) -> Gửi thông báo
+export async function approveUpgrade(requestId: string, userId: number, planType: string) {
   try {
+    const isTeacher = planType === "TEACHER_APPROVAL";
+
     // Dùng transaction để đảm bảo cả 3 việc cùng thành công hoặc cùng thất bại
     await prisma.$transaction([
       // 1. Cập nhật trạng thái đơn -> APPROVED
@@ -23,28 +25,33 @@ export async function approveUpgrade(requestId: string, userId: number) {
         data: { status: "APPROVED" }
       }),
 
-      // 2. Nâng cấp User -> isPro = true
+      // 2. Nâng cấp User (Phân biệt Giáo viên hay PRO)
       prisma.user.update({
         where: { id: userId },
-        data: { isPro: true }
+        data: isTeacher ? { role: "TEACHER" } : { isPro: true }
       }),
 
-      // 3. (MỚI) TẠO THÔNG BÁO CHO USER
+      // 3. TẠO THÔNG BÁO CHO USER (Tùy biến câu chữ theo loại nâng cấp)
       prisma.notification.create({
         data: {
           userId: userId,
-          type: "SYSTEM", // Loại thông báo
-          message: "🎉 Chúc mừng! Tài khoản của bạn đã được nâng cấp lên PRO thành công. Hãy trải nghiệm ngay!",
+          type: "SYSTEM", 
+          message: isTeacher 
+            ? "🎉 Chúc mừng! Đơn đăng ký Giảng viên của bạn đã được duyệt. Hãy đăng nhập lại để vào trang Quản trị nhé!"
+            : "🎉 Chúc mừng! Tài khoản của bạn đã được nâng cấp lên PRO thành công. Hãy trải nghiệm ngay!",
           isRead: false,
-          link: "/courses" // Bấm vào thông báo sẽ dẫn đến trang khóa học
+          link: isTeacher ? "/teacher/dashboard" : "/student/my-courses" 
         }
       })
     ]);
 
+    // Xóa cache để giao diện Admin cập nhật ngay lập tức
     revalidatePath("/admin/upgrades");
+    revalidatePath("/admin/users"); 
+    
     return { success: true };
   } catch (error) {
-    console.error("Lỗi duyệt đơn:", error); // Log lỗi ra để dễ debug
+    console.error("Lỗi duyệt đơn:", error); 
     return { success: false, error: "Lỗi hệ thống khi duyệt đơn" };
   }
 }
@@ -52,10 +59,12 @@ export async function approveUpgrade(requestId: string, userId: number) {
 // TỪ CHỐI ĐƠN
 export async function rejectUpgrade(requestId: string) {
   try {
+    // Tùy chọn: Bạn cũng có thể thêm logic gửi thông báo từ chối (Notification) ở đây tương tự như trên
     await prisma.upgradeRequest.update({
       where: { id: requestId },
       data: { status: "REJECTED" }
     });
+    
     revalidatePath("/admin/upgrades");
     return { success: true };
   } catch (error) {

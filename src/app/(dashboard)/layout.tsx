@@ -1,10 +1,11 @@
 "use client"; // QUAN TRỌNG: Biến Layout thành Client Component để dùng Provider
 
+import React, { ReactNode } from "react"; // 🔥 Khai báo thêm dòng này để hết lỗi React.ReactNode
 import { Sidebar } from "@/components/common/Sidebar";
 import { SessionProvider } from "next-auth/react";      // Sửa lỗi useSession
 import { TooltipProvider } from "@/components/ui/tooltip"; // Sửa lỗi Tooltip
 
-export default function DashboardLayout({ children }: { children: React.ReactNode }) {
+export default function DashboardLayout({ children }: { children: ReactNode }) {
   return (
     // 1. Bọc SessionProvider để sửa lỗi đăng nhập/lấy thông tin user
     <SessionProvider>
@@ -16,7 +17,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
           {/* Phần nội dung chính */}
           <div className="flex-1 flex flex-col min-w-0 transition-all duration-300">
-            <main className="flex-1 p-6 md:p-8 overflow-y-auto h-screen scroll-smooth">
+            <main className="flex-1 p-6 md:p-8 overflow-y-auto h-screen scroll-smooth custom-scrollbar">
               <div className="max-w-7xl mx-auto animate-in fade-in-50 slide-in-from-bottom-5 duration-500">
                 {children}
               </div>

@@ -20,10 +20,14 @@ export async function GET(req: Request) {
             },
             orderBy: { createdAt: 'desc' },
             include: {
-                user: { select: { id: true, name: true, avatar: true } },
+                // 🔥 BỔ SUNG isPro: true (Để hiện viền vàng cho người bình luận)
+                user: { select: { id: true, name: true, avatar: true, isPro: true } },
                 // Lấy kèm các câu trả lời (Level 2)
                 replies: {
-                    include: { user: { select: { id: true, name: true, avatar: true } } },
+                    include: { 
+                        // 🔥 BỔ SUNG isPro: true (Để hiện viền vàng cho người trả lời)
+                        user: { select: { id: true, name: true, avatar: true, isPro: true } } 
+                    },
                     orderBy: { createdAt: 'asc' }
                 }
             }
@@ -52,7 +56,8 @@ export async function GET(req: Request) {
       orderBy: { createdAt: 'desc' },
       take: 20,
       include: {
-        user: { select: { id: true, name: true, avatar: true, role: true } },
+        // 🔥 BỔ SUNG isPro: true (Để hiện viền vàng cho người đăng bài)
+        user: { select: { id: true, name: true, avatar: true, role: true, isPro: true } },
         _count: { select: { likes: true, comments: true } },
         likes: currentUserId ? { where: { userId: currentUserId } } : false
       }
@@ -117,7 +122,8 @@ export async function POST(req: Request) {
                 parentId: parentId || null // Nếu có parentId thì là Reply
             },
             include: {
-                user: { select: { id: true, name: true, avatar: true } }
+                // 🔥 BỔ SUNG isPro: true (Để khi vừa ấn gửi bình luận xong, ảnh đại diện hiện luôn viền vàng mà không cần F5)
+                user: { select: { id: true, name: true, avatar: true, isPro: true } }
             }
         });
         return NextResponse.json(newComment);

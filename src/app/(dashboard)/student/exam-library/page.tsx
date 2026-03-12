@@ -1,343 +1,371 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
-import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
+import { useState, useMemo, useEffect } from "react";
+import { useSession } from "next-auth/react"; 
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { 
-  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuCheckboxItem, DropdownMenuLabel, DropdownMenuSeparator
+  DropdownMenu, DropdownMenuContent, DropdownMenuCheckboxItem, DropdownMenuTrigger, DropdownMenuLabel, DropdownMenuSeparator 
 } from "@/components/ui/dropdown-menu";
 import { 
-  Search, Filter, Download, Eye, Star, FileText, Globe, Code, 
-  Calculator, Atom, BookOpen, CloudLightning, Layers, SortAsc, 
-  Loader2, CheckCircle2, Facebook, Twitter, Instagram, Linkedin, ArrowRight
+  Search, SlidersHorizontal, Zap, Star, ArrowRight, Crown,
+  Code, Globe, Calculator, PenTool, BookOpen, Flame, Users, Instagram, Facebook, Twitter, Loader2
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import Link from "next/link";
+import { toast } from "sonner";
+import { useRouter } from "next/navigation";
 
-// --- CONFIG MAPPING ICON ---
+// --- CONFIG ICON MÔN HỌC ---
 const SUBJECT_ICONS: Record<string, any> = {
-  "English": { icon: Globe, color: "text-blue-500", bg: "bg-blue-50 dark:bg-blue-900/20" },
-  "Math": { icon: Calculator, color: "text-rose-500", bg: "bg-rose-50 dark:bg-rose-900/20" },
-  "IT": { icon: Code, color: "text-emerald-500", bg: "bg-emerald-50 dark:bg-emerald-900/20" },
-  "Coding": { icon: Code, color: "text-emerald-500", bg: "bg-emerald-50 dark:bg-emerald-900/20" },
-  "Physics": { icon: Atom, color: "text-purple-500", bg: "bg-purple-50 dark:bg-purple-900/20" },
-  "General": { icon: BookOpen, color: "text-stone-500", bg: "bg-stone-50 dark:bg-stone-800" }
+  "English": { icon: Globe, color: "text-blue-600 bg-blue-50 dark:bg-blue-500/10 dark:text-blue-400", grad: "from-blue-500 to-cyan-500" },
+  "IT": { icon: Code, color: "text-cyan-600 bg-cyan-50 dark:bg-cyan-500/10 dark:text-cyan-400", grad: "from-cyan-500 to-teal-500" },
+  "Toán": { icon: Calculator, color: "text-rose-600 bg-rose-50 dark:bg-rose-500/10 dark:text-rose-400", grad: "from-rose-500 to-red-600" },
+  "Design": { icon: PenTool, color: "text-purple-600 bg-purple-50 dark:bg-purple-500/10 dark:text-purple-400", grad: "from-purple-500 to-violet-600" },
+  "General": { icon: BookOpen, color: "text-stone-600 bg-stone-50 dark:bg-stone-500/10 dark:text-stone-400", grad: "from-stone-500 to-gray-500" }
 };
 
 export default function ExamLibraryPage() {
-  // STATE QUẢN LÝ DỮ LIỆU
+  const { data: session } = useSession();
+  const router = useRouter();
+  
+  const [searchTerm, setSearchTerm] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState("All");
+  const [selectedDifficulty, setSelectedDifficulty] = useState<string | null>(null);
   const [exams, setExams] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   
-  // STATE BỘ LỌC
-  const [searchTerm, setSearchTerm] = useState("");
-  const [filterSubject, setFilterSubject] = useState<string | null>(null);
-  const [filterFormat, setFilterFormat] = useState<string | null>(null);
+  // 🔥 STATE MỚI: Theo dõi xem nút tải nào đang xoay loading
+  const [downloadingId, setDownloadingId] = useState<number | null>(null);
 
-  // STATE LOADING BUTTON (Để tránh spam nút tải)
-  const [downloadingId, setDownloadingId] = useState<string | null>(null);
-
-  // 1. FETCH DỮ LIỆU TỪ API (LẤY TẤT CẢ ĐỀ THI)
+  // Lấy dữ liệu thật từ Database
   useEffect(() => {
     const fetchExams = async () => {
       try {
-        const queryParams = new URLSearchParams();
-        if(searchTerm) queryParams.set("q", searchTerm);
-        if(filterSubject) queryParams.set("category", filterSubject);
-        if(filterFormat) queryParams.set("format", filterFormat);
-
-        // Gọi API lọc
-        const res = await fetch(`/api/courses?${queryParams.toString()}`);
+        const res = await fetch("/api/courses");
         const data = await res.json();
 
         if (Array.isArray(data)) {
-          const mappedData = data.map((item: any) => {
-            // Mapping icon đẹp
-            let subjKey = "General";
-            if(item.title.includes("English") || item.category==="English") subjKey = "English";
-            else if(item.title.includes("Math") || item.category==="Math") subjKey = "Math";
-            else if(item.title.includes("IT") || item.category==="IT" || item.category==="Coding") subjKey = "IT";
-            else if(item.title.includes("Physic") || item.category==="Physics") subjKey = "Physics";
-
-            const theme = SUBJECT_ICONS[subjKey] || SUBJECT_ICONS["General"];
-
-            // Giả lập số liệu nếu DB chưa có (để giao diện đẹp)
+          const formattedExams = data.map((c: any) => {
+            let subjectType = "General";
+            if (c.title.toLowerCase().includes("toán")) subjectType = "Toán";
+            else if (c.title.toLowerCase().includes("english") || c.title.toLowerCase().includes("anh")) subjectType = "English";
+            else if (c.title.toLowerCase().includes("it") || c.title.toLowerCase().includes("lập trình")) subjectType = "IT";
+            const theme = SUBJECT_ICONS[subjectType] || SUBJECT_ICONS["General"];
+            
+            const safeId = String(c.id); 
+            const seed = safeId.charCodeAt(0) || 0;
+            
             return {
-              id: item.id,
-              title: item.title,
-              subject: { name: item.category, ...theme },
-              type: item.format || "ONLINE", // ONLINE, PDF, DOCX
-              downloads: item.downloads || Math.floor(Math.random()*5000)+100,
-              views: Math.floor(Math.random()*10000)+500,
-              rating: item.rating || (4 + Math.random()).toFixed(1),
-              pages: item.metaData?.pages || 10,
-              year: item.metaData?.year || 2024,
-              size: item.metaData?.size || "2MB",
-              isPro: item.isPro || false,
-              isSaved: item.savedCourses?.length > 0 // Kiểm tra đã lưu chưa
+              id: c.id,
+              title: c.title,
+              category: c.category || "General",
+              author: c.author?.name || "Giảng viên",
+              icon: theme.icon,
+              color: theme.color,
+              gradient: theme.grad,
+              participants: (seed * 123) % 900 + 100, 
+              rating: (4 + (seed % 10) / 10).toFixed(1),
+              isHot: ((seed * 123) % 900 + 100) > 600,
+              questions: c._count?.questions || 0,
+              isPro: c.category === "PRO" || c.price > 0 
             };
           });
-          setExams(mappedData);
+          setExams(formattedExams);
         }
       } catch (error) {
-        console.error("Lỗi tải đề:", error);
+        console.error("Lỗi:", error);
       } finally {
         setLoading(false);
       }
     };
+    fetchExams();
+  }, []);
 
-    // Debounce search (chờ người dùng gõ xong mới tìm)
-    const timeoutId = setTimeout(() => {
-        fetchExams();
-    }, 500);
+  const filteredExams = useMemo(() => {
+    return exams.filter((exam) => {
+      const matchesSearch = exam.title.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesCategory = selectedCategory === "All" || 
+                              (exam.category && exam.category.includes(selectedCategory));
+      return matchesSearch && matchesCategory;
+    });
+  }, [searchTerm, selectedCategory, exams]);
 
-    return () => clearTimeout(timeoutId);
-  }, [searchTerm, filterSubject, filterFormat]);
+  const featuredExam = exams.find(e => e.isHot) || exams[0];
 
-  // 2. XỬ LÝ TẢI VỀ / LƯU THƯ VIỆN
-  const handleDownload = async (exam: any) => {
-    setDownloadingId(exam.id);
-    
-    try {
-      // Gọi API Save Course
-      const res = await fetch("/api/courses", {
-        method: "POST",
-        body: JSON.stringify({ action: "SAVE_COURSE", courseId: exam.id })
-      });
-      
-      if (res.ok) {
-         // Nếu là PDF/DOCX -> Mở tab mới tải file (Giả lập)
-         if (exam.type !== "ONLINE") {
-             window.open("https://example.com/dummy-file.pdf", "_blank");
-         } else {
-             // Nếu là Online Test -> Chỉ cần báo đã lưu (Có thể thêm Toast notification)
-             console.log("Đã lưu vào Kho khóa học!");
-         }
-         
-         // Cập nhật UI (Đã lưu)
-         setExams(prev => prev.map(e => e.id === exam.id ? {...e, isSaved: true, downloads: Number(e.downloads) + 1} : e));
+  // ==============================================================================
+  // 🔥 LOGIC MỚI: TẢI ĐỀ (LƯU DATABASE) VÀ CHUYỂN HƯỚNG SANG MY COURSES
+  // ==============================================================================
+  const handleDownloadExam = async (examId: number, isPro: boolean) => {
+      // 1. Kiểm tra quyền PRO
+      const userIsPro = (session?.user as any)?.isPro === true; 
+
+      if (isPro && !userIsPro) {
+          toast.error("Khoá học này yêu cầu tài khoản PRO!", {
+              description: "Vui lòng nâng cấp tài khoản để tải đề thi chất lượng cao.",
+              action: {
+                  label: "Nâng cấp ngay",
+                  onClick: () => router.push("/student/pro") // Trỏ đúng về trang PRO
+              }
+          });
+          return;
       }
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setDownloadingId(null);
-    }
+
+      // 2. Bắt đầu gọi API lưu khóa học
+      setDownloadingId(examId);
+      try {
+          const res = await fetch("/api/courses", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ action: "SAVE_COURSE", courseId: examId })
+          });
+
+          const data = await res.json();
+
+          if (res.ok || data.success) {
+              toast.success("Tải đề thành công!", {
+                  description: "Đề thi đã được cất vào Khóa Học Của Tôi. Hệ thống đang chuyển hướng..."
+              });
+              
+              // 3. Chuyển hướng sang kho cá nhân sau 1 giây
+              setTimeout(() => {
+                  router.push("/student/my-courses");
+              }, 1000);
+          } else {
+              toast.error(data.error || "Có lỗi xảy ra khi tải đề.");
+              setDownloadingId(null);
+          }
+      } catch (error) {
+          toast.error("Lỗi kết nối đến máy chủ.");
+          setDownloadingId(null);
+      }
   };
 
   return (
-    <div className="flex h-[calc(100vh-8rem)] w-full flex-col overflow-hidden bg-[#fdfbf7] dark:bg-[#0c0a09] transition-colors duration-500 rounded-3xl border border-stone-200 dark:border-stone-800 shadow-2xl relative animate-in fade-in zoom-in-95 duration-500">
+    <div className="flex flex-col min-h-screen bg-[#fdfbf7] dark:bg-[#0c0a09] transition-colors duration-500">
+      <div className="flex-grow space-y-10 pb-20">
       
-      {/* --- 1. HEADER & TOOLBAR --- */}
-      <div className="shrink-0 p-6 border-b border-stone-200 dark:border-stone-800 bg-white/80 dark:bg-[#0c0a09]/80 backdrop-blur-md z-20">
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
-          <div>
-            <h1 className="text-3xl font-black text-stone-800 dark:text-stone-100 flex items-center gap-2">
-              <BookOpen className="text-amber-600" /> Thư viện Đề thi
-            </h1>
-            <p className="text-stone-500 text-sm font-medium mt-1">
-              Kho tàng kiến thức vô tận. Hơn <span className="text-amber-600 font-bold">{loading ? "..." : exams.length}+</span> đề thi chất lượng cao.
-            </p>
+      {/* --- HERO SECTION --- */}
+      {!loading && featuredExam && (
+        <div className="relative overflow-hidden rounded-b-3xl bg-stone-900 text-white shadow-2xl mx-auto border-b border-stone-800 mb-8 animate-in fade-in slide-in-from-top-10 duration-700">
+          <div className={`absolute inset-0 bg-gradient-to-r ${featuredExam.gradient} opacity-20`}></div>
+          <div className="absolute -right-20 -top-20 w-96 h-96 bg-white/10 rounded-full blur-3xl"></div>
+          
+          <div className="relative z-10 p-10 md:p-14 flex flex-col md:flex-row items-center gap-10 max-w-7xl mx-auto">
+            <div className="flex-1 space-y-6 text-center md:text-left">
+               <Badge className="bg-amber-500 text-black hover:bg-amber-400 font-bold px-3 py-1 mb-2 animate-pulse border-0">
+                  <Flame size={14} className="mr-1 fill-black" /> ĐỀ THI HOT NHẤT TUẦN
+               </Badge>
+               <h1 className="text-4xl md:text-5xl font-black tracking-tight leading-tight line-clamp-2">
+                  {featuredExam.title}
+               </h1>
+               <p className="text-stone-300 text-lg max-w-xl mx-auto md:mx-0">
+                  Cung cấp bởi: <span className="font-bold text-white">{featuredExam.author}</span> • {featuredExam.questions} câu hỏi
+               </p>
+               <div className="flex flex-col sm:flex-row gap-4 justify-center md:justify-start pt-2">
+                  <Button 
+                    size="lg" 
+                    onClick={() => handleDownloadExam(featuredExam.id, featuredExam.isPro)} 
+                    disabled={downloadingId === featuredExam.id}
+                    className="bg-white text-stone-900 hover:bg-stone-200 font-bold rounded-xl h-14 px-8 shadow-xl text-lg w-full sm:w-auto"
+                  >
+                     {downloadingId === featuredExam.id ? <Loader2 className="mr-2 animate-spin text-stone-900"/> : <Zap className="mr-2 fill-stone-900" />}
+                     {downloadingId === featuredExam.id ? "Đang xử lý..." : "Tải Đề Ngay"}
+                  </Button>
+               </div>
+            </div>
+            
+            <div className="hidden md:flex items-center justify-center relative w-80 h-80">
+               <div className={`absolute inset-0 bg-gradient-to-br ${featuredExam.gradient} rounded-full blur-[80px] opacity-40`}></div>
+               <div className="relative bg-stone-950/80 backdrop-blur-xl border border-white/10 p-8 rounded-3xl shadow-2xl rotate-6 hover:rotate-0 transition-transform duration-500">
+                  <featuredExam.icon size={80} className="text-white mb-4" />
+                  <div className="space-y-2">
+                     <div className="h-2 w-32 bg-white/20 rounded-full"></div>
+                     <div className="h-2 w-20 bg-white/20 rounded-full"></div>
+                  </div>
+                  {featuredExam.isPro && <Badge className="absolute top-4 right-4 bg-amber-500 text-black font-bold border-0">PRO</Badge>}
+               </div>
+            </div>
           </div>
-          <Button className="bg-stone-900 dark:bg-stone-100 text-white dark:text-stone-900 hover:bg-amber-600 dark:hover:bg-amber-500 font-bold shadow-lg shadow-amber-500/20">
-            <CloudLightning className="mr-2 h-4 w-4" /> Đóng góp đề thi
-          </Button>
+        </div>
+      )}
+
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
+      {/* --- FILTER BAR --- */}
+      <div className="sticky top-[80px] z-30 bg-[#fdfbf7]/90 dark:bg-[#0c0a09]/90 backdrop-blur-xl py-4 rounded-2xl flex flex-col md:flex-row gap-4 items-center justify-between border-b border-stone-100 dark:border-stone-800">
+        <div className="flex items-center gap-2 overflow-x-auto w-full md:w-auto pb-2 md:pb-0 scrollbar-hide">
+           {["All", "FREE", "PRO"].map((cat) => (
+            <button
+              key={cat} onClick={() => setSelectedCategory(cat)}
+              className={cn(
+                "whitespace-nowrap rounded-full border px-5 py-2 font-bold transition-all text-sm",
+                selectedCategory === cat 
+                  ? "bg-stone-900 text-white border-stone-900 shadow-lg dark:bg-stone-100 dark:text-stone-900"
+                  : "bg-white border-stone-200 text-stone-600 hover:border-amber-400 hover:text-amber-600 dark:bg-[#1c1917] dark:border-stone-800 dark:text-stone-400"
+              )}
+            >
+              {cat}
+            </button>
+           ))}
         </div>
 
-        {/* Search & Filter Bar */}
-        <div className="flex flex-col md:flex-row gap-3">
-          <div className="relative flex-1 group">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-stone-400 group-focus-within:text-amber-500 transition-colors" />
-            <Input 
-              placeholder="Tìm kiếm theo tên đề, mã đề..." 
-              className="pl-10 h-11 bg-stone-50 dark:bg-[#1c1917] border-stone-200 dark:border-stone-800 focus-visible:ring-amber-500 rounded-xl"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
-          </div>
-          
-          <div className="flex gap-2 overflow-x-auto pb-1 md:pb-0 scrollbar-hide">
-             <DropdownMenu>
-               <DropdownMenuTrigger asChild>
-                 <Button variant="outline" className={cn("h-11 rounded-xl border-stone-200 dark:border-stone-800 bg-white dark:bg-[#1c1917]", filterSubject && "bg-amber-50 border-amber-200 text-amber-700")}>
-                   <Filter className="mr-2 h-4 w-4" /> {filterSubject || "Môn học"}
-                 </Button>
-               </DropdownMenuTrigger>
-               <DropdownMenuContent>
-                   <DropdownMenuLabel>Chọn môn</DropdownMenuLabel>
-                   <DropdownMenuSeparator/>
-                   <DropdownMenuCheckboxItem checked={filterSubject === null} onCheckedChange={() => setFilterSubject(null)}>Tất cả</DropdownMenuCheckboxItem>
-                   <DropdownMenuCheckboxItem checked={filterSubject === "English"} onCheckedChange={() => setFilterSubject("English")}>Tiếng Anh</DropdownMenuCheckboxItem>
-                   <DropdownMenuCheckboxItem checked={filterSubject === "IT"} onCheckedChange={() => setFilterSubject("IT")}>Công nghệ</DropdownMenuCheckboxItem>
-                   <DropdownMenuCheckboxItem checked={filterSubject === "Math"} onCheckedChange={() => setFilterSubject("Math")}>Toán học</DropdownMenuCheckboxItem>
-               </DropdownMenuContent>
-             </DropdownMenu>
-
-             <DropdownMenu>
-               <DropdownMenuTrigger asChild>
-                 <Button variant="outline" className={cn("h-11 rounded-xl border-stone-200 dark:border-stone-800 bg-white dark:bg-[#1c1917]", filterFormat && "bg-amber-50 border-amber-200 text-amber-700")}>
-                   <Layers className="mr-2 h-4 w-4" /> {filterFormat || "Định dạng"}
-                 </Button>
-               </DropdownMenuTrigger>
-               <DropdownMenuContent>
-                   <DropdownMenuLabel>Định dạng file</DropdownMenuLabel>
-                   <DropdownMenuSeparator/>
-                   <DropdownMenuCheckboxItem checked={filterFormat === null} onCheckedChange={() => setFilterFormat(null)}>Tất cả</DropdownMenuCheckboxItem>
-                   <DropdownMenuCheckboxItem checked={filterFormat === "ONLINE"} onCheckedChange={() => setFilterFormat("ONLINE")}>Thi Online</DropdownMenuCheckboxItem>
-                   <DropdownMenuCheckboxItem checked={filterFormat === "PDF"} onCheckedChange={() => setFilterFormat("PDF")}>PDF</DropdownMenuCheckboxItem>
-               </DropdownMenuContent>
-             </DropdownMenu>
-
-             <Button variant="outline" className="h-11 w-11 p-0 rounded-xl border-stone-200 dark:border-stone-800 bg-white dark:bg-[#1c1917]">
-               <SortAsc className="h-4 w-4 text-stone-500" />
-             </Button>
-          </div>
+        <div className="flex gap-3 w-full md:w-auto">
+           <div className="relative flex-1 md:w-64">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-stone-400" />
+              <Input 
+                value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="Tìm đề thi..." 
+                className="pl-9 bg-white border-stone-200 rounded-xl dark:bg-[#1c1917] dark:border-stone-800"
+              />
+           </div>
         </div>
       </div>
 
-      {/* --- 2. MAIN CONTENT (SCROLLABLE) --- */}
-      <div className="flex-1 min-h-0 relative">
-        <ScrollArea className="h-full px-6 custom-scrollbar">
-          <div className="py-6 min-h-[calc(100vh-20rem)]">
-            
-            {/* Loading State */}
-            {loading && (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                    {Array.from({length:8}).map((_,i) => (
-                        <div key={i} className="h-64 bg-stone-200 dark:bg-stone-800 rounded-2xl animate-pulse"></div>
-                    ))}
+      {/* --- EXAM GRID --- */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 animate-in fade-in slide-in-from-bottom-5 duration-700">
+        {loading ? (
+             Array.from({length: 8}).map((_, i) => (
+                 <div key={i} className="h-72 bg-stone-200 dark:bg-stone-800 rounded-3xl animate-pulse"></div>
+             ))
+        ) : filteredExams.length > 0 ? (
+          filteredExams.map((exam) => (
+            <Card key={exam.id} className="group flex flex-col h-full relative overflow-hidden border-stone-200 dark:border-stone-800 bg-white dark:bg-[#1c1917] hover:shadow-2xl hover:shadow-amber-900/5 dark:hover:shadow-black/50 hover:-translate-y-1.5 transition-all duration-300 rounded-3xl">
+              {/* Sticker PRO */}
+              {exam.isPro && (
+                  <div className="absolute top-0 right-0 bg-amber-500 text-black text-xs font-bold px-3 py-1.5 rounded-bl-2xl z-10 shadow-sm flex items-center gap-1">
+                      <Crown size={12}/> PRO
+                  </div>
+              )}
+              
+              <div className={`absolute top-0 left-0 right-0 h-1 bg-gradient-to-r ${exam.gradient}`}></div>
+              
+              <CardHeader className="pb-3 pt-6 px-6">
+                <div className="flex justify-between items-start mb-4">
+                  <div className={`p-3 rounded-2xl ${exam.color} shadow-sm group-hover:scale-110 transition-transform`}>
+                    <exam.icon size={24} />
+                  </div>
+                  {!exam.isPro && <Badge variant="outline" className="border-emerald-200 text-emerald-600 bg-emerald-50 dark:bg-emerald-900/20 font-bold px-3 py-1">FREE</Badge>}
                 </div>
-            )}
-
-            {/* Empty State */}
-            {!loading && exams.length === 0 && (
-                <div className="flex flex-col items-center justify-center py-20 text-center opacity-60">
-                    <BookOpen size={64} className="text-stone-300 mb-4"/>
-                    <h3 className="text-xl font-bold text-stone-700 dark:text-stone-300">Không tìm thấy đề thi nào</h3>
-                    <p className="text-stone-500">Thử thay đổi bộ lọc hoặc từ khóa tìm kiếm.</p>
+                
+                <div className="min-h-[3.5rem] flex items-center">
+                  <CardTitle className="text-lg font-bold text-stone-800 dark:text-stone-100 leading-tight group-hover:text-amber-600 transition-colors line-clamp-2">
+                    {exam.title}
+                  </CardTitle>
                 </div>
-            )}
 
-            {/* Exam Grid */}
-            {!loading && exams.length > 0 && (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 mb-10">
-                {exams.map((item, index) => (
-                  <Card 
-                    key={item.id} 
-                    className="group relative overflow-hidden border-stone-200 dark:border-stone-800 bg-white dark:bg-[#1c1917] hover:shadow-xl hover:shadow-amber-900/5 dark:hover:shadow-black/50 hover:-translate-y-1 transition-all duration-500 rounded-2xl animate-in fade-in slide-in-from-bottom-10 fill-mode-forwards"
-                    style={{ animationDelay: `${index * 50}ms` }}
-                  >
-                    {/* Pro Badge */}
-                    {item.isPro && (
-                      <div className="absolute top-0 right-0 bg-amber-500 text-white text-[10px] font-bold px-2 py-1 rounded-bl-lg z-10 shadow-sm">
-                        PRO
-                      </div>
-                    )}
+                <div className="flex items-center gap-3 pt-2 text-xs font-medium text-stone-500 dark:text-stone-400">
+                  <span className="flex items-center gap-1"><Users size={12}/> {exam.participants} lượt tải</span>
+                </div>
+              </CardHeader>
 
-                    <CardHeader className="pb-3 pt-5 px-5">
-                      <div className="flex justify-between items-start mb-3">
-                        <div className={`p-2.5 rounded-xl ${item.subject.bg} transition-transform group-hover:scale-110 duration-300`}>
-                          <item.subject.icon size={20} className={item.subject.color} />
-                        </div>
-                        <Badge variant="outline" className="text-[10px] uppercase tracking-wider text-stone-500 border-stone-200 dark:border-stone-700 bg-stone-50 dark:bg-stone-800">
-                          {item.type}
-                        </Badge>
-                      </div>
-                      
-                      <div className="min-h-[3.5rem]">
-                        <CardTitle className="text-base font-bold text-stone-800 dark:text-stone-100 leading-snug group-hover:text-amber-600 transition-colors line-clamp-2">
-                          {item.title}
-                        </CardTitle>
-                      </div>
-                    </CardHeader>
-
-                    <CardContent className="px-5 pb-4">
-                      <div className="flex items-center gap-4 text-xs text-stone-500 dark:text-stone-400 font-medium">
-                        <span className="flex items-center gap-1"><Download size={12}/> {item.downloads}</span>
-                        <span className="flex items-center gap-1"><Eye size={12}/> {item.views}</span>
-                        <span className="flex items-center gap-1 text-amber-500"><Star size={12} className="fill-amber-500"/> {item.rating}</span>
-                      </div>
-                      
-                      <div className="mt-4 flex items-center gap-2 text-[10px] text-stone-400 bg-stone-50 dark:bg-stone-800/50 p-2 rounded-lg">
-                        <FileText size={12} /> {item.pages} trang • {item.size} • Năm {item.year}
-                      </div>
-                    </CardContent>
-
-                    <CardFooter className="px-5 pb-5 pt-0 flex gap-2">
-                      <Button size="sm" variant="outline" className="flex-1 h-9 text-xs font-bold border-stone-200 dark:border-stone-700 hover:text-amber-600 hover:border-amber-200 dark:text-stone-300">
-                        <Eye size={14} className="mr-1.5" /> Xem
-                      </Button>
-                      
-                      <Button 
-                        onClick={() => handleDownload(item)}
-                        disabled={downloadingId === item.id || item.isSaved}
-                        size="sm" 
-                        className={cn(
-                            "flex-1 h-9 text-xs font-bold shadow-md transition-all",
-                            item.isSaved 
-                                ? "bg-green-600 hover:bg-green-700 text-white" 
-                                : "bg-stone-900 dark:bg-stone-100 text-white dark:text-stone-900 hover:bg-amber-600"
-                        )}
-                      >
-                        {downloadingId === item.id ? <Loader2 size={14} className="animate-spin"/> : 
-                         item.isSaved ? <><CheckCircle2 size={14} className="mr-1.5"/> Đã lưu</> : 
-                         <><Download size={14} className="mr-1.5" /> Tải về</>}
-                      </Button>
-                    </CardFooter>
-                  </Card>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* --- FOOTER CHUYÊN NGHIỆP --- */}
-          <div className="border-t border-stone-200 dark:border-stone-800 bg-stone-50 dark:bg-[#151311] py-12 px-8">
-             <div className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-8">
-                <div className="col-span-1 md:col-span-2 space-y-4">
-                   <h3 className="font-black text-stone-800 dark:text-stone-100 text-lg flex items-center gap-2">
-                      <BookOpen className="text-amber-600"/> EduTech Library
-                   </h3>
-                   <p className="text-sm text-stone-500 dark:text-stone-400 max-w-sm leading-relaxed">
-                      Nền tảng chia sẻ tài liệu học tập số 1 dành cho học sinh, sinh viên. Chúng tôi cam kết chất lượng nội dung và trải nghiệm người dùng tốt nhất.
-                   </p>
-                   <div className="flex gap-2">
-                      <Button size="icon" variant="outline" className="rounded-full h-8 w-8"><Facebook size={14}/></Button>
-                      <Button size="icon" variant="outline" className="rounded-full h-8 w-8"><Twitter size={14}/></Button>
-                      <Button size="icon" variant="outline" className="rounded-full h-8 w-8"><Instagram size={14}/></Button>
-                      <Button size="icon" variant="outline" className="rounded-full h-8 w-8"><Linkedin size={14}/></Button>
+              <CardContent className="pb-4 px-6 flex-grow">
+                <div className="grid grid-cols-2 gap-2 mt-2">
+                   <div className="bg-stone-50 dark:bg-stone-800/50 rounded-xl p-3 text-center border border-stone-100 dark:border-stone-800">
+                      <p className="text-[10px] text-stone-400 uppercase font-bold">Câu hỏi</p>
+                      <p className="text-sm font-bold text-stone-700 dark:text-stone-300">{exam.questions}</p>
+                   </div>
+                   <div className="bg-stone-50 dark:bg-stone-800/50 rounded-xl p-3 text-center border border-stone-100 dark:border-stone-800">
+                      <p className="text-[10px] text-stone-400 uppercase font-bold">Giảng viên</p>
+                      <p className="text-sm font-bold text-stone-700 dark:text-stone-300 truncate px-1">{exam.author}</p>
                    </div>
                 </div>
-                <div>
-                   <h4 className="font-bold text-stone-800 dark:text-stone-100 mb-4 text-sm uppercase tracking-wider">Tài nguyên</h4>
-                   <ul className="space-y-2 text-sm text-stone-500 dark:text-stone-400">
-                      <li className="hover:text-amber-600 cursor-pointer">Đề thi Đại học</li>
-                      <li className="hover:text-amber-600 cursor-pointer">Tài liệu IELTS</li>
-                      <li className="hover:text-amber-600 cursor-pointer">Sách giáo khoa</li>
-                      <li className="hover:text-amber-600 cursor-pointer">Blog học tập</li>
-                   </ul>
-                </div>
-                <div>
-                   <h4 className="font-bold text-stone-800 dark:text-stone-100 mb-4 text-sm uppercase tracking-wider">Hỗ trợ</h4>
-                   <ul className="space-y-2 text-sm text-stone-500 dark:text-stone-400">
-                      <li className="hover:text-amber-600 cursor-pointer">Trung tâm trợ giúp</li>
-                      <li className="hover:text-amber-600 cursor-pointer">Điều khoản sử dụng</li>
-                      <li className="hover:text-amber-600 cursor-pointer">Chính sách bảo mật</li>
-                      <div className="flex gap-2 mt-2">
-                         <Input placeholder="Email nhận tin..." className="bg-white h-8 text-xs"/>
-                         <Button size="sm" className="h-8 w-8 p-0 bg-stone-900"><ArrowRight size={12}/></Button>
-                      </div>
-                   </ul>
-                </div>
+              </CardContent>
+
+              <CardFooter className="pt-0 px-6 pb-6 mt-auto">
+                <Button 
+                    onClick={() => handleDownloadExam(exam.id, exam.isPro)} 
+                    disabled={downloadingId === exam.id}
+                    className={cn(
+                        "w-full font-bold shadow-md transition-all h-12 rounded-xl group",
+                        exam.isPro 
+                            ? "bg-amber-500 hover:bg-amber-600 text-stone-900 shadow-amber-500/20" 
+                            : "bg-stone-900 hover:bg-stone-800 text-white dark:bg-white dark:text-stone-900 dark:hover:bg-stone-200"
+                    )}
+                >
+                   {downloadingId === exam.id ? (
+                       <><Loader2 size={16} className="mr-2 animate-spin"/> Đang Tải Về...</>
+                   ) : (
+                       <>
+                         {exam.isPro ? "Mở khóa Tải Đề" : "Xem & Tải Miễn Phí"} 
+                         <ArrowRight size={16} className="ml-2 group-hover:translate-x-1 transition-transform" />
+                       </>
+                   )}
+                </Button>
+              </CardFooter>
+            </Card>
+          ))
+        ) : (
+          <div className="col-span-full py-20 text-center">
+             <div className="inline-block p-6 rounded-full bg-stone-100 dark:bg-stone-800 mb-4">
+               <Search size={48} className="text-stone-300" />
              </div>
-             <div className="border-t border-stone-200 dark:border-stone-700 pt-6 text-center text-xs text-stone-400">
-                © 2026 EduTech AI Platform. All rights reserved.
-             </div>
+             <h3 className="text-xl font-bold text-stone-700 dark:text-stone-300">Không tìm thấy bài thi nào</h3>
           </div>
-        </ScrollArea>
+        )}
+      </div>
+      </div>
       </div>
 
+      {/* --- FOOTER (Giữ nguyên) --- */}
+      <footer className="bg-white dark:bg-[#110e0d] border-t border-stone-200 dark:border-stone-800/50 pt-20 pb-10">
+         <div className="max-w-7xl mx-auto px-6 lg:px-8">
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-12 lg:gap-16 mb-16">
+               <div className="col-span-1 md:col-span-4 space-y-6">
+                  <div className="flex items-center gap-2 text-2xl font-black text-stone-900 dark:text-white">
+                     <div className="h-10 w-10 bg-amber-500 rounded-xl flex items-center justify-center text-white shadow-lg shadow-amber-500/20">
+                         <Zap size={24} fill="currentColor"/>
+                     </div>
+                     EduTech.AI
+                  </div>
+                  <p className="text-stone-500 dark:text-stone-400 text-base leading-relaxed pr-4">
+                     Kho tàng tri thức vô tận. Nền tảng duy nhất bạn cần để chinh phục mọi kỳ thi, từ THPT Quốc Gia đến các chứng chỉ quốc tế.
+                  </p>
+                  <div className="flex gap-3 pt-2">
+                     <Button size="icon" variant="outline" className="rounded-full border-stone-200 dark:border-stone-700 hover:text-blue-600 hover:border-blue-600 dark:bg-transparent"><Facebook size={18}/></Button>
+                     <Button size="icon" variant="outline" className="rounded-full border-stone-200 dark:border-stone-700 hover:text-sky-500 hover:border-sky-500 dark:bg-transparent"><Twitter size={18}/></Button>
+                     <Button size="icon" variant="outline" className="rounded-full border-stone-200 dark:border-stone-700 hover:text-rose-500 hover:border-rose-500 dark:bg-transparent"><Instagram size={18}/></Button>
+                  </div>
+               </div>
+
+               <div className="col-span-1 md:col-span-2 md:col-start-6">
+                  <h4 className="font-bold text-stone-900 dark:text-white mb-6 text-lg">Khám phá</h4>
+                  <ul className="space-y-4 text-base text-stone-500 dark:text-stone-400 font-medium">
+                     <li className="hover:text-amber-600 dark:hover:text-amber-500 cursor-pointer transition-colors">Trang chủ</li>
+                     <li className="hover:text-amber-600 dark:hover:text-amber-500 cursor-pointer transition-colors flex items-center gap-2">Đề thi PRO <Badge className="bg-amber-500 hover:bg-amber-500 text-[10px] px-1 py-0 h-4">HOT</Badge></li>
+                     <li className="hover:text-amber-600 dark:hover:text-amber-500 cursor-pointer transition-colors">Bảng xếp hạng</li>
+                  </ul>
+               </div>
+
+               <div className="col-span-1 md:col-span-2">
+                  <h4 className="font-bold text-stone-900 dark:text-white mb-6 text-lg">Hỗ trợ</h4>
+                  <ul className="space-y-4 text-base text-stone-500 dark:text-stone-400 font-medium">
+                     <li className="hover:text-amber-600 dark:hover:text-amber-500 cursor-pointer transition-colors">Trung tâm CSKH</li>
+                     <li className="hover:text-amber-600 dark:hover:text-amber-500 cursor-pointer transition-colors">Chính sách bảo mật</li>
+                     <li className="hover:text-amber-600 dark:hover:text-amber-500 cursor-pointer transition-colors">Điều khoản dịch vụ</li>
+                  </ul>
+               </div>
+
+               <div className="col-span-1 md:col-span-3">
+                  <h4 className="font-bold text-stone-900 dark:text-white mb-6 text-lg">Nhận thông báo</h4>
+                  <p className="text-base text-stone-500 dark:text-stone-400 mb-4 font-medium">Đừng bỏ lỡ các bộ đề Vận dụng cao mới nhất.</p>
+                  <div className="flex flex-col gap-3">
+                     <Input placeholder="Nhập email của bạn..." className="h-12 bg-stone-50 border-stone-200 dark:bg-stone-900/50 dark:border-stone-800 rounded-xl px-4"/>
+                     <Button className="h-12 bg-stone-900 text-white hover:bg-amber-600 rounded-xl font-bold dark:bg-white dark:text-stone-900 dark:hover:bg-amber-500 w-full">Đăng ký ngay</Button>
+                  </div>
+               </div>
+            </div>
+
+            <div className="border-t border-stone-100 dark:border-stone-800/50 pt-8 flex flex-col md:flex-row justify-between items-center gap-4 text-sm font-medium">
+               <p className="text-stone-400">© 2026 EduTech AI Platform. Mọi bản quyền được bảo lưu.</p>
+               <div className="flex gap-6 text-stone-400">
+                  <span className="hover:text-stone-600 dark:hover:text-stone-200 cursor-pointer transition-colors">Privacy</span>
+                  <span className="hover:text-stone-600 dark:hover:text-stone-200 cursor-pointer transition-colors">Terms</span>
+                  <span className="hover:text-stone-600 dark:hover:text-stone-200 cursor-pointer transition-colors">Vietnam (VN)</span>
+               </div>
+            </div>
+         </div>
+      </footer>
     </div>
   );
 }

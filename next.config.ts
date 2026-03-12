@@ -1,15 +1,25 @@
 import type { NextConfig } from "next";
+import withPWAInit from "@ducanh2912/next-pwa";
 
+// 1. Cấu hình PWA
+const withPWA = withPWAInit({
+  dest: "public",
+  disable: process.env.NODE_ENV === "development", // Tắt PWA khi đang code ở localhost để tránh lỗi cache
+  register: true,
+  skipWaiting: true,
+});
+
+// 2. Cấu hình Next.js cũ của bạn (Giữ nguyên 100%)
 const nextConfig: NextConfig = {
-  // 1. Ép máy tính bỏ qua lỗi TypeScript
+  // Ép máy tính bỏ qua lỗi TypeScript
   typescript: {
     ignoreBuildErrors: true,
   },
-  // 2. Ép máy tính bỏ qua lỗi ESLint (phòng hờ)
+  // Ép máy tính bỏ qua lỗi ESLint (phòng hờ)
   eslint: {
     ignoreDuringBuilds: true,
   },
-  // 3. Các cấu hình khác giữ nguyên
+  // Các cấu hình khác giữ nguyên
   images: {
     remotePatterns: [
       {
@@ -25,4 +35,5 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default nextConfig;
+// 3. Xuất file: Bọc cấu hình Next.js bên trong cấu hình PWA
+export default withPWA(nextConfig);

@@ -8,25 +8,28 @@ async function main() {
   const password = await bcrypt.hash("123456", 10);
 
   const users = [
-    // 2 ADMIN
-    { email: "admin1@gmail.com", name: "Admin Số 1", role: "ADMIN" },
-    { email: "admin2@gmail.com", name: "Admin Số 2", role: "ADMIN" },
+    // 3 ADMIN
+    { email: "admin1@gmail.com", name: "Quản Trị Viên 01", role: "ADMIN" },
+    { email: "admin2@gmail.com", name: "Quản Trị Viên 02", role: "ADMIN" },
+    { email: "admin3@gmail.com", name: "Quản Trị Viên 03", role: "ADMIN" },
     
-    // 2 TEACHER
-    { email: "teacher1@gmail.com", name: "Cô Giáo Thảo", role: "TEACHER" },
-    { email: "teacher2@gmail.com", name: "Thầy Ba", role: "TEACHER" },
+    // 3 TEACHER
+    { email: "teacher1@gmail.com", name: "Giảng Viên 01", role: "TEACHER" },
+    { email: "teacher2@gmail.com", name: "Giảng Viên 02", role: "TEACHER" },
+    { email: "teacher3@gmail.com", name: "Giảng Viên 03", role: "TEACHER" },
 
-    // 2 STUDENT
-    { email: "student1@gmail.com", name: "Trò Giỏi", role: "STUDENT" },
-    { email: "student2@gmail.com", name: "Trò Ngoan", role: "STUDENT" },
+    // 3 STUDENT
+    { email: "student1@gmail.com", name: "Học Viên 01", role: "STUDENT" },
+    { email: "student2@gmail.com", name: "Học Viên 02", role: "STUDENT" },
+    { email: "student3@gmail.com", name: "Học Viên 03", role: "STUDENT" },
   ];
 
-  console.log("⏳ Đang tạo 6 tài khoản mẫu...");
+  console.log("⏳ Đang tạo 9 tài khoản mẫu...");
 
   for (const u of users) {
     await prisma.user.upsert({
       where: { email: u.email },
-      update: { role: u.role, password: password }, // Nếu có rồi thì reset pass/role
+      update: { role: u.role, password: password, name: u.name }, // Cập nhật cả tên nếu đổi
       create: {
         email: u.email,
         name: u.name,
@@ -36,7 +39,7 @@ async function main() {
     });
   }
 
-  console.log("✅ XONG! Đã tạo 6 tài khoản thành công.");
+  console.log("✅ XONG! Đã tạo 9 tài khoản thành công.");
 }
 
 main()

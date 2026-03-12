@@ -26,12 +26,12 @@ model Account {
   type              String
   provider          String
   providerAccountId String
-  refresh_token     String? @db.Text
-  access_token      String? @db.Text
+  refresh_token     String?  @db.Text
+  access_token      String?  @db.Text
   expires_at        Int?
   token_type        String?
   scope             String?
-  id_token          String? @db.Text
+  id_token          String?  @db.Text
   session_state     String?
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -95,8 +95,8 @@ model User {
   accounts      Account[]
   sessions      Session[]
 
-  // Quan hệ Quản lý
-  createdCourses  Course[] @relation("CourseAuthor") 
+  // 🔥 ĐÃ SỬA: Đổi 'createdCourses' thành 'courses' để đồng bộ với code UI
+  courses       Course[] @relation("CourseAuthor") 
 
   // Quan hệ Hệ thống cũ
   examResults   ExamResult[]
@@ -140,18 +140,18 @@ model Transaction {
 
 // MODEL YÊU CẦU NÂNG CẤP (UPGRADE REQUEST)
 model UpgradeRequest {
-  id        String   @id @default(uuid())
-  userId    Int
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id         String   @id @default(uuid())
+  userId     Int
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   
-  planType  String   @default("LIFETIME") 
-  amount    Float    
-  status    String   @default("PENDING") 
-  content   String?  
-  imageProof String? 
+  planType   String   @default("LIFETIME") 
+  amount     Float    
+  status     String   @default("PENDING") 
+  content    String?  
+  imageProof String?  
   
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 }
 
 // =========================================================
@@ -177,7 +177,7 @@ model Course {
   downloads    Int      @default(0)        
   rating       Float    @default(5.0)      
   fileUrl      String?                       
-  metaData     Json?    
+  metaData     Json?   
 
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
@@ -203,6 +203,13 @@ model Question {
   options       Json     
   correctAnswer String   
   
+  // --- ĐÃ BỔ SUNG: CÁC TRƯỜNG DÀNH CHO AI GENERATOR ---
+  type          String   @default("MULTIPLE_CHOICE")
+  correct       Int?
+  correctAnswers Json?
+  position      Int      @default(1)
+  // ---------------------------------------------------
+
   courseId      Int
   course        Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
   
@@ -407,8 +414,8 @@ model Notification {
 // =========================================================
 
 model LearningPath {
-  id        String   @id @default(cuid())
-  title     String   
+  id          String   @id @default(cuid())
+  title       String   
   description String?
   progress    Int      @default(0) 
   
@@ -429,14 +436,14 @@ model Milestone {
 }
 
 model DailyTask {
-  id        String   @id @default(cuid())
-  title     String   
-  xp        Int      @default(50)
-  isCompleted Boolean @default(false)
-  date      DateTime @default(now()) 
+  id          String   @id @default(cuid())
+  title       String   
+  xp          Int      @default(50)
+  isCompleted Boolean  @default(false)
+  date        DateTime @default(now()) 
   
-  userId    Int
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId      Int
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model FocusSession {
