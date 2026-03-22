@@ -29,7 +29,7 @@
 
 👉 **Link Trang web chính thức:** [https://edutech-ai-platform.onrender.com/login](https://edutech-ai-platform.onrender.com/login)
 
-👉 **Link Mobile-app báo điểm thi nhanh(đang phát triển):** [https://edutech-ai-platform.onrender.com/login](https://edutech-ai-platform.onrender.com/mobile-app)
+👉 **Link Mobile-app báo điểm thi nhanh(đang phát triển):** [https://edutech-ai-platform.onrender.com/mobile-app](https://edutech-ai-platform.onrender.com/mobile-app)
 
 ## 🌟 Giới Thiệu Dự Án
 
