@@ -27,7 +27,9 @@
 | 👨‍🏫 **Teacher** | `ltt.tea@gmail.com` | Tạo khóa học mới, dùng AI tạo đề thi trắc nghiệm, xem điểm học viên. |
 | 👨‍🎓 **Student** | `ltt.stu@gmail.com` | Test tính năng thi trực tuyến với camera giám thị AI, Mở khoá pro bằng QR và Chat với Gia sư AI. |
 
-👉 **Link Đăng Nhập:** [https://edutech-ai-platform.onrender.com/login](https://edutech-ai-platform.onrender.com/login)
+👉 **Link Trang web chính thức:** [https://edutech-ai-platform.onrender.com/login](https://edutech-ai-platform.onrender.com/login)
+👉 **Link Mobile-app báo điểm thi nhanh(đang phát triển):** [https://edutech-ai-platform.onrender.com/login](https://edutech-ai-platform.onrender.com/mobile-app)
+
 ## 🌟 Giới Thiệu Dự Án
 
 **EduTech AI** là giải pháp công nghệ giáo dục (EdTech) toàn diện, được xây dựng nhằm mục đích tối ưu hóa trải nghiệm giảng dạy và học tập. Điểm đột phá của dự án là việc tích hợp Trí tuệ nhân tạo (AI) giúp cá nhân hóa lộ trình học, giải đáp thắc mắc tự động (AI Mentor) và hỗ trợ giáo viên soạn đề thi thông minh.
