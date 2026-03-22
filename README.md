@@ -28,6 +28,7 @@
 | 👨‍🎓 **Student** | `ltt.stu@gmail.com` | Test tính năng thi trực tuyến với camera giám thị AI, Mở khoá pro bằng QR và Chat với Gia sư AI. |
 
 👉 **Link Trang web chính thức:** [https://edutech-ai-platform.onrender.com/login](https://edutech-ai-platform.onrender.com/login)
+
 👉 **Link Mobile-app báo điểm thi nhanh(đang phát triển):** [https://edutech-ai-platform.onrender.com/login](https://edutech-ai-platform.onrender.com/mobile-app)
 
 ## 🌟 Giới Thiệu Dự Án
