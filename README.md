@@ -25,7 +25,7 @@
 | :--- | :--- | :--- |
 | 👑 **Admin** | `ltt.admin@gmail.com` | Xem Dashboard doanh thu, duyệt tài khoản Giảng viên, quản lý hệ thống. |
 | 👨‍🏫 **Teacher** | `ltt.tea@gmail.com` | Tạo khóa học mới, dùng AI tạo đề thi trắc nghiệm, xem điểm học viên. |
-| 👨‍🎓 **Student** | `ltt.stu@gmail.com` | (Đã có sẵn 1 triệu VNĐ trong ví) Dùng để test tính năng mua khóa học, thi thử và Chat với Gia sư AI. |
+| 👨‍🎓 **Student** | `ltt.stu@gmail.com` | Test tính năng thi trực tuyến với camera giám thị AI, Mở khoá pro bằng QR và Chat với Gia sư AI. |
 
 👉 **Link Đăng Nhập:** [https://edutech-ai-platform.onrender.com/login](https://edutech-ai-platform.onrender.com/login)
 ## 🌟 Giới Thiệu Dự Án
@@ -63,11 +63,11 @@ Hệ thống được thiết kế với 3 phân quyền chuyên biệt:
 
 | STT | Họ và Tên | MSSV | Vai Trò |
 | :---: | :--- | :---: | :--- |
-| 1 | **Lê Thanh Tùng** | `5250138` | Leader / Fullstack Developer |
-| 2 | **Nguyễn Tiến Lộc** | `5250091` | Frontend Developer |
-| 3 | **Nguyễn Văn Sơn** | `5250129` | Backend Developer / Database |
-| 4 | **Nguyễn Văn Vinh** | `5250171` | QA / Tester & Documentation |
-| 5 | **Phạm Đức Mạnh** | `5250098` | UI/UX Designer & Content |
+| 1 | **Lê Thanh Tùng** | `5250138` | Leader / Backend / Database |
+| 2 | **Nguyễn Tiến Lộc** | `5250091` | DevOps & QA|
+| 3 | **Nguyễn Văn Sơn** | `5250129` | AI Engineer |
+| 4 | **Nguyễn Văn Vinh** | `5250171` | Mobile Dev |
+| 5 | **Phạm Đức Mạnh** | `5250098` | Frontend Developer |
 
 ---
 
