@@ -98,7 +98,7 @@ export async function generateExamQuestionsAI(title: string, topic: string) {
       model: "command-r-08-2024" 
     });
     
-    const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("AI_TIMEOUT")), 50000)); 
+    const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("AI_TIMEOUT")), 10000)); 
     
     const response = await Promise.race([chatPromise, timeoutPromise]) as any;
 

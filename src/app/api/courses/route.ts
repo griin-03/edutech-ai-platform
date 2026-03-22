@@ -81,14 +81,20 @@ export async function POST(req: Request) {
            });
 
            if (!existingSave) {
-               await prisma.savedCourse.create({
-                   data: { userId: user.id, courseId: courseId }
-               });
-               
-               await prisma.course.update({
-                   where: { id: courseId },
-                   data: { downloads: { increment: 1 } }
-               });
+               // =====================================================================
+               // ĐOẠN CODE DÙNG ĐỂ CHỤP ẢNH: HÌNH 6.7 (Cơ chế Transaction)
+               // Đảm bảo 2 thao tác: (1) Lưu SavedCourse và (2) Tăng downloads phải thành công 100%
+               // =====================================================================
+               await prisma.$transaction([
+                   prisma.savedCourse.create({
+                       data: { userId: user.id, courseId: courseId }
+                   }),
+                   prisma.course.update({
+                       where: { id: courseId },
+                       data: { downloads: { increment: 1 } }
+                   })
+               ]);
+               // =====================================================================
            }
            
            return NextResponse.json({ success: true });

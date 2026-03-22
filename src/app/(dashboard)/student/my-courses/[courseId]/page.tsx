@@ -3,13 +3,14 @@
 import { useState, useEffect, useRef, use } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Bot, ArrowLeft, Volume2, Save, RotateCcw, MapPin, ShieldAlert, Lock, AlertTriangle } from "lucide-react";
+// 🔥 Bổ sung thêm icon XCircle để làm nút tắt
+import { Bot, ArrowLeft, Volume2, Save, RotateCcw, MapPin, ShieldAlert, Lock, AlertTriangle, XCircle } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
-// Thư viện render Toán học
 import 'katex/dist/katex.min.css';
 import Latex from 'react-latex-next';
+import ProctoringCamera from "@/components/ui/ProctoringCamera";
 
 const STORAGE_KEY_PREFIX = "exam_progress_";
 const MAX_VIOLATIONS = 3;
@@ -19,7 +20,6 @@ export default function ExamPage({ params }: { params: Promise<{ courseId: strin
   const router = useRouter();
   const storageKey = `${STORAGE_KEY_PREFIX}${courseId}`;
 
-  // --- STATE (GIỮ NGUYÊN 100%) ---
   const [loading, setLoading] = useState(false);
   const [loadingProgress, setLoadingProgress] = useState(0); 
   const [error, setError] = useState("");
@@ -30,19 +30,17 @@ export default function ExamPage({ params }: { params: Promise<{ courseId: strin
   const [score, setScore] = useState(0);
   const [isFocusMode, setIsFocusMode] = useState(false);
 
-  // --- STATE GIAN LẬN (GIỮ NGUYÊN 100%) ---
   const [violations, setViolations] = useState(0);
   const [showWarning, setShowWarning] = useState(false);
+  // 🔥 Thêm State để lưu lý do vi phạm (hiển thị lên thanh thông báo)
+  const [warningReason, setWarningReason] = useState(""); 
   const [isSuspended, setIsSuspended] = useState(false);
 
-  // 🔥 STATE MỚI: QUẢN LÝ MODAL NỘP BÀI (THAY THẾ CONFIRM LOCALHOST)
   const [showSubmitConfirm, setShowSubmitConfirm] = useState(false);
-  // 🔥 STATE CHỐNG SUBMIT NHIỀU LẦN
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const isLoaded = useRef(false);
 
-  // 1. LOAD TIẾN TRÌNH CŨ (GIỮ NGUYÊN)
   useEffect(() => {
     if (isLoaded.current) return;
     isLoaded.current = true;
@@ -61,9 +59,8 @@ export default function ExamPage({ params }: { params: Promise<{ courseId: strin
     }
   }, [storageKey]);
 
-  // 2. GIÁM THỊ AI (ĐÃ FIX LỖI BẮT NHẦM KHI HIỆN MODAL NỘP BÀI)
+  // GIÁM THỊ TAB/TRÌNH DUYỆT
   useEffect(() => {
-    // 🔥 NẾU ĐANG HIỆN MODAL NỘP BÀI, TẠM DỪNG BẮT GIAN LẬN
     if (submitted || questions.length === 0 || loading || showSubmitConfirm) return; 
 
     const handleViolation = (reason: string) => {
@@ -80,8 +77,13 @@ export default function ExamPage({ params }: { params: Promise<{ courseId: strin
            setIsSuspended(true);
            handleAutoSubmit(true);
         } else {
-           setShowWarning(true);
-           setTimeout(() => setShowWarning(false), 5000);
+           // 🔥 DELAY 2 GIÂY MỚI HIỆN THÔNG BÁO
+           setTimeout(() => {
+               setWarningReason(reason);
+               setShowWarning(true);
+               // Tự động tắt sau 5s nếu user không tự bấm tắt
+               setTimeout(() => setShowWarning(false), 5000);
+           }, 2000);
         }
         return newCount;
       });
@@ -97,11 +99,10 @@ export default function ExamPage({ params }: { params: Promise<{ courseId: strin
       document.removeEventListener("visibilitychange", onVisibilityChange);
       window.removeEventListener("blur", onBlur);
     };
-  }, [submitted, questions, storageKey, loading, showSubmitConfirm]); // Thêm showSubmitConfirm vào dependency
+  }, [submitted, questions, storageKey, loading, showSubmitConfirm]); 
 
-  // 3. ĐẾM NGƯỢC (GIỮ NGUYÊN)
+  // ĐẾM NGƯỢC
   useEffect(() => {
-    // Tạm dừng đếm ngược nếu đang hiện modal xác nhận nộp bài (tùy chọn)
     if (questions.length > 0 && !submitted && timeLeft > 0 && !loading && !showSubmitConfirm) {
       const timer = setInterval(() => {
         setTimeLeft((prev) => {
@@ -117,9 +118,7 @@ export default function ExamPage({ params }: { params: Promise<{ courseId: strin
     if (timeLeft === 0 && !submitted && questions.length > 0) handleAutoSubmit(false);
   }, [timeLeft, submitted, questions, answers, violations, storageKey, loading, showSubmitConfirm]);
 
-  // ==============================================================================
   // TẢI ĐỀ THI TỪ DATABASE
-  // ==============================================================================
   const handleStartExam = async () => {
     if (document.documentElement.requestFullscreen) {
       document.documentElement.requestFullscreen().catch(() => {});
@@ -164,29 +163,54 @@ export default function ExamPage({ params }: { params: Promise<{ courseId: strin
   };
 
   const handleAutoSubmit = (suspended = false) => {
-      setShowSubmitConfirm(false); // Ẩn modal nếu đang hiện
+      setShowSubmitConfirm(false); 
       processSubmit(suspended);
   };
 
-  // 🔥 THAY THẾ CONFIRM BẰNG MODAL TÙY CHỈNH
   const handleRequestSubmit = () => {
     const unanswered = questions.length - Object.keys(answers).length;
     if (unanswered > 0) {
-        setShowSubmitConfirm(true); // Hiện modal cảnh báo thiếu câu
+        setShowSubmitConfirm(true); 
     } else {
-        processSubmit(false); // Nếu làm đủ, nộp luôn không cần hỏi
+        processSubmit(false); 
     }
   };
 
-  // 🔥 LOGIC CHẤM ĐIỂM (Tách riêng khỏi nút bấm để gọi từ Modal)
+  // XỬ LÝ KẾT QUẢ TỪ AI CAMERA
+  const handleCameraViolation = (reason: string) => {
+    if (submitted || questions.length === 0 || loading || showSubmitConfirm || isSuspended) return;
+
+    console.warn("⚠️ [AI CAMERA] Gian lận:", reason);
+
+    setViolations((prev) => {
+      const newCount = prev + 1;
+      const currentData = localStorage.getItem(storageKey);
+      if (currentData) {
+         const parsed = JSON.parse(currentData);
+         parsed.violations = newCount;
+         localStorage.setItem(storageKey, JSON.stringify(parsed));
+      }
+
+      if (newCount >= MAX_VIOLATIONS) {
+         setIsSuspended(true);
+         handleAutoSubmit(true); 
+      } else {
+         // 🔥 DELAY 2 GIÂY MỚI HIỆN THÔNG BÁO
+         setTimeout(() => {
+             setWarningReason(reason);
+             setShowWarning(true);
+             setTimeout(() => setShowWarning(false), 5000);
+         }, 2000);
+      }
+      return newCount;
+    });
+  };
+
   const processSubmit = async (suspended = false) => {
-    // 🔥 CHỐNG GỬI NHIỀU LẦN
     if (isSubmitting) return;
     setIsSubmitting(true);
-    
-    setShowSubmitConfirm(false); // Đóng modal
+    setShowSubmitConfirm(false); 
 
-    // Tính điểm cục bộ để hiển thị
     let correct = 0;
     questions.forEach(q => { 
         if (q.type === "SHORT_ANSWER") {
@@ -197,7 +221,6 @@ export default function ExamPage({ params }: { params: Promise<{ courseId: strin
             } else if (typeof q.correctAnswers === 'string') {
                 try { correctArr = JSON.parse(q.correctAnswers); } catch(e) { correctArr = q.correctAnswers.split(','); }
             }
-            
             const isMatch = correctArr.some((ans: string) => ans.trim().toLowerCase() === userAnswer);
             if (isMatch) correct++;
         } else {
@@ -213,37 +236,26 @@ export default function ExamPage({ params }: { params: Promise<{ courseId: strin
     if (document.exitFullscreen) document.exitFullscreen().catch(()=> {});
 
     try {
-      // 🔥 TẠO OBJECT ANSWERS ĐỂ GỬI LÊN SERVER
       const answersToSubmit: Record<string, any> = {};
-      
-      // Chỉ gửi những câu đã có đáp án
       questions.forEach(q => {
         if (answers[q.id] !== undefined && answers[q.id] !== "") {
           answersToSubmit[q.id] = answers[q.id];
         }
       });
 
-      console.log("📤 Gửi answers lên server:", answersToSubmit);
-
-      // GỬI LÊN SERVER VỚI ĐÚNG FORMAT
       const response = await fetch("/api/courses", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ 
             action: "GRADE", 
             courseId: Number(courseId), 
-            answers: answersToSubmit, // 🔥 QUAN TRỌNG: Gửi answers thay vì scoreFromClient
+            answers: answersToSubmit, 
             violationCount: violations, 
             isSuspended: suspended
         }),
       });
 
       const data = await response.json();
-      console.log("📥 Kết quả từ server:", data);
-
-      // Nếu server trả về điểm khác, cập nhật lại
       if (data.calculatedScore !== undefined && data.calculatedScore !== finalScore) {
         setScore(data.calculatedScore);
       }
@@ -253,7 +265,6 @@ export default function ExamPage({ params }: { params: Promise<{ courseId: strin
     } finally {
       setIsSubmitting(false);
     }
-    
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
@@ -266,15 +277,12 @@ export default function ExamPage({ params }: { params: Promise<{ courseId: strin
     if(window.speechSynthesis) {
       window.speechSynthesis.cancel();
       const u = new SpeechSynthesisUtterance(txt.replace(/\$/g, '')); 
-      u.lang = "vi-VN"; 
-      u.rate = 0.9;     
+      u.lang = "vi-VN"; u.rate = 0.9;     
       window.speechSynthesis.speak(u);
     }
   };
 
   const containerClass = isFocusMode ? "fixed inset-0 z-50 bg-[#F5F5F7] overflow-y-auto select-none font-sans" : "max-w-7xl mx-auto space-y-6 p-6 pb-24 select-none font-sans"; 
-
-  // Tính số câu chưa làm để hiển thị trong Modal
   const unansweredCount = questions.length - Object.keys(answers).length;
 
   return (
@@ -295,15 +303,16 @@ export default function ExamPage({ params }: { params: Promise<{ courseId: strin
                         <div className="mx-auto w-24 h-24 bg-rose-50 rounded-full flex items-center justify-center mb-6">
                             <ShieldAlert size={40} className="text-rose-500" />
                         </div>
-                        <h2 className="text-2xl font-bold tracking-tight text-slate-900 mb-2">Phòng Thi Giám Sát</h2>
+                        <h2 className="text-2xl font-bold tracking-tight text-slate-900 mb-2">Phòng Thi Giám Sát AI</h2>
                         <div className="text-slate-600 mb-8 space-y-2 text-sm bg-slate-50/50 p-6 rounded-2xl border border-slate-100 text-left">
                             <p className="font-bold text-slate-800 mb-3 text-base">Quy chế bắt buộc:</p>
-                            <div className="flex items-center gap-2"><div className="w-1.5 h-1.5 rounded-full bg-slate-400"/> Không chuyển tab, click ra ngoài.</div>
+                            <div className="flex items-center gap-2"><div className="w-1.5 h-1.5 rounded-full bg-slate-400"/> Camera AI liên tục quét khuôn mặt & điện thoại.</div>
+                            <div className="flex items-center gap-2"><div className="w-1.5 h-1.5 rounded-full bg-slate-400"/> Không chuyển tab, click ra ngoài, dùng app chụp ảnh.</div>
                             <div className="flex items-center gap-2"><div className="w-1.5 h-1.5 rounded-full bg-slate-400"/> Hệ thống chặn Copy/Paste/Chuột phải.</div>
-                            <p className="text-rose-600 font-bold mt-4 pt-4 border-t border-rose-100">⚠️ Vi phạm 3 lần = ĐÌNH CHỈ THI.</p>
+                            <p className="text-rose-600 font-bold mt-4 pt-4 border-t border-rose-100">⚠️ Vi phạm 3 lần = ĐÌNH CHỈ THI LẬP TỨC.</p>
                         </div>
                         <Button onClick={handleStartExam} size="lg" className="bg-slate-900 text-white hover:bg-slate-800 font-medium px-8 h-12 rounded-full shadow-md w-full">
-                            Đồng ý & Bắt đầu thi
+                            Đồng ý Bật Camera & Bắt đầu thi
                         </Button>
                     </>
                 ) : loading ? (
@@ -311,8 +320,8 @@ export default function ExamPage({ params }: { params: Promise<{ courseId: strin
                         <div className="mx-auto w-20 h-20 bg-blue-50 rounded-full flex items-center justify-center mb-6">
                              <Bot size={36} className="text-blue-600 animate-pulse" />
                         </div>
-                        <h3 className="text-xl font-bold tracking-tight text-slate-900 mb-2">Đang tải đề thi...</h3>
-                        <p className="text-slate-500 text-sm mb-8">Hệ thống đang tải dữ liệu đề thi gốc từ kho lưu trữ</p>
+                        <h3 className="text-xl font-bold tracking-tight text-slate-900 mb-2">Đang tải đề thi & AI...</h3>
+                        <p className="text-slate-500 text-sm mb-8">Hệ thống đang khởi động thuật toán chống gian lận</p>
                         
                         <div className="w-full h-3 bg-slate-100 rounded-full overflow-hidden relative">
                             <div 
@@ -332,13 +341,18 @@ export default function ExamPage({ params }: { params: Promise<{ courseId: strin
             </Card>
         )}
 
+        {/* 🔥 COMPONENT CAMERA GIÁM THỊ (GÓC DƯỚI BÊN PHẢI) */}
+        {!loading && questions.length > 0 && !submitted && !isSuspended && (
+            <div className="fixed bottom-8 right-8 z-[60] shadow-2xl rounded-xl transition-all hover:scale-105">
+                <ProctoringCamera onViolationDetected={handleCameraViolation} />
+            </div>
+        )}
+
         {/* 2. GIAO DIỆN LÀM BÀI */}
         {!loading && questions.length > 0 && (
             <div className="grid grid-cols-1 lg:grid-cols-4 gap-8 animate-in fade-in duration-700 mt-4">
                 
-                {/* CỘT TRÁI: DANH SÁCH CÂU HỎI */}
                 <div className="lg:col-span-3 space-y-8">
-                    {/* Header Mobile */}
                     <div className="lg:hidden flex items-center justify-between bg-white/80 backdrop-blur-md p-5 rounded-2xl shadow-sm border border-slate-100/50 sticky top-4 z-40">
                          <h2 className="font-medium text-slate-500">Thời gian:</h2>
                          <span className="font-mono text-2xl font-bold text-slate-900 tracking-tighter">
@@ -382,7 +396,6 @@ export default function ExamPage({ params }: { params: Promise<{ courseId: strin
                                         variant="outline" 
                                         onClick={() => speak(q.text)} 
                                         className="shrink-0 rounded-full w-10 h-10 border-slate-200 text-slate-500 hover:text-blue-600 hover:bg-blue-50 transition-colors"
-                                        title="Nghe câu hỏi"
                                     >
                                         <Volume2 size={18}/>
                                     </Button>
@@ -439,7 +452,6 @@ export default function ExamPage({ params }: { params: Promise<{ courseId: strin
                     })}
                 </div>
 
-                {/* CỘT PHẢI: BẢNG ĐIỀU KHIỂN */}
                 <div className="lg:col-span-1">
                     <div className="sticky top-8 space-y-6">
                         
@@ -458,7 +470,7 @@ export default function ExamPage({ params }: { params: Promise<{ courseId: strin
                             </div>
 
                             <div className="flex items-center justify-between bg-rose-50/50 p-3 rounded-2xl border border-rose-100 text-xs text-rose-600 font-medium">
-                                <span className="flex items-center gap-1.5"><ShieldAlert size={14}/> Vi phạm:</span>
+                                <span className="flex items-center gap-1.5"><ShieldAlert size={14}/> Vi phạm AI báo:</span>
                                 <span className="font-bold">{violations}/{MAX_VIOLATIONS}</span>
                             </div>
 
@@ -518,7 +530,6 @@ export default function ExamPage({ params }: { params: Promise<{ courseId: strin
                             )}
                         </Card>
 
-                        {/* NÚT NỘP BÀI GỌI MODAL ĐẸP MẮT */}
                         {!submitted ? (
                             <Button 
                                 onClick={handleRequestSubmit} 
@@ -551,7 +562,7 @@ export default function ExamPage({ params }: { params: Promise<{ courseId: strin
             </div>
         )}
 
-        {/* 🔥 MODAL XÁC NHẬN NỘP BÀI KHI CHƯA LÀM HẾT CÂU (CUSTOM UI) */}
+        {/* MODAL XÁC NHẬN NỘP BÀI KHI CHƯA LÀM HẾT CÂU */}
         {showSubmitConfirm && !submitted && !isSuspended && (
             <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm animate-in fade-in zoom-in duration-200">
                 <Card className="p-8 max-w-md w-full mx-4 text-center bg-white rounded-3xl shadow-2xl">
@@ -583,18 +594,31 @@ export default function ExamPage({ params }: { params: Promise<{ courseId: strin
             </div>
         )}
 
-        {/* MODAL CẢNH BÁO VI PHẠM */}
+        {/* 🔥 THANH THÔNG BÁO VI PHẠM (TOAST NHỎ GỌN, KHÔNG LÀM MỜ MÀN HÌNH) */}
         {showWarning && !isSuspended && !submitted && (
-            <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm animate-in fade-in">
-                <Card className="p-8 max-w-sm w-full mx-4 text-center bg-white rounded-3xl shadow-2xl animate-bounce">
-                    <ShieldAlert size={56} className="mx-auto mb-4 text-rose-500"/>
-                    <h2 className="text-2xl font-bold tracking-tight text-slate-900 mb-2">CẢNH BÁO!</h2>
-                    <p className="text-slate-600 text-sm">Phát hiện rời khỏi màn hình thi.</p>
-                </Card>
+            <div className="fixed top-6 right-6 z-[100] animate-in slide-in-from-right-8 fade-in duration-300">
+                <div className="bg-white border-l-4 border-rose-500 shadow-[0_8px_30px_rgb(0,0,0,0.12)] rounded-2xl p-4 flex items-start gap-4 max-w-sm w-full">
+                    <div className="bg-rose-50 rounded-full p-2 shrink-0 mt-0.5">
+                        <ShieldAlert size={20} className="text-rose-600" />
+                    </div>
+                    <div className="flex-1">
+                        <h3 className="font-bold text-slate-800 text-sm">Cảnh báo vi phạm!</h3>
+                        <p className="text-slate-500 text-xs mt-1 leading-relaxed">
+                            {warningReason || "Hệ thống AI vừa phát hiện hành vi đáng ngờ."} Vui lòng tập trung làm bài!
+                        </p>
+                    </div>
+                    <button 
+                        onClick={() => setShowWarning(false)} 
+                        className="text-slate-400 hover:text-slate-600 bg-slate-50 hover:bg-slate-100 rounded-full p-1.5 transition-colors"
+                        title="Đóng cảnh báo"
+                    >
+                        <XCircle size={16} />
+                    </button>
+                </div>
             </div>
         )}
 
-        {/* MÀN HÌNH ĐÌNH CHỈ */}
+        {/* MÀN HÌNH ĐÌNH CHỈ (Vẫn giữ nguyên Fullscreen vì đã bị đuổi thi) */}
         {isSuspended && (
             <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-md">
                 <Card className="p-10 text-center bg-white border-none rounded-[2rem] max-w-md w-full mx-4 shadow-2xl">

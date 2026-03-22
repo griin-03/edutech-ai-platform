@@ -11,6 +11,7 @@ const withPWA = withPWAInit({
 
 // 2. Cấu hình Next.js cũ của bạn (Giữ nguyên 100%)
 const nextConfig: NextConfig = {
+  swcMinify: false,
   // Ép máy tính bỏ qua lỗi TypeScript
   typescript: {
     ignoreBuildErrors: true,

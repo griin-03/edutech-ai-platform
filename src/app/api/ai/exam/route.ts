@@ -30,7 +30,7 @@ export async function POST(req: Request) {
 
       console.log(`>> [Cohere] Đang tạo đề cho: ${course.title}...`);
 
-      // 🌟 PROMPT MỚI: TẬP TRUNG CHUYÊN MÔN, CHIA LÀM 2 LOẠI CÂU HỎI
+      // 🌟 PROMPT MỚI: TÍCH HỢP LUẬT [SLASH] BẢO VỆ JSON
       const prompt = `
         Đóng vai là một Chuyên gia khảo thí cấp cao của Bộ Giáo dục và Đào tạo Việt Nam.
         Nhiệm vụ: Tạo một bộ đề thi gồm 10 câu hỏi (7 câu trắc nghiệm, 3 câu tự luận ngắn điền từ) cho khóa học "${course.title}" (Cấp độ: ${course.level}).
@@ -41,7 +41,7 @@ export async function POST(req: Request) {
         
         STRICT TECHNICAL RULES (VIOLATION CAUSES SERVER CRASH):
         1. Return ONLY a valid JSON array. NO greetings, NO explanations.
-        2. Do NOT use backslashes (\\) inside strings. Use forward slashes (/) if needed.
+        2. Do NOT use backslashes (\\) inside strings. Use the keyword [SLASH] instead of backslashes for any formulas or special characters. Example: write [SLASH]frac{1}{2} instead of \\frac{1}{2}.
         3. Do NOT use Markdown formatting (no \`\`\`json).
         
         BẮT BUỘC TUÂN THỦ CẤU TRÚC JSON SAU MỘT CÁCH NGHIÊM NGẶT:
@@ -79,7 +79,17 @@ export async function POST(req: Request) {
               text = text.substring(firstBracket, lastBracket + 1);
           }
 
-          text = text.replace(/\\/g, "/"); 
+          // ==========================================================
+          // 🛡️ BẢO VỆ 2 LỚP: TIỀN XỬ LÝ DỮ LIỆU JSON TRƯỚC KHI PARSE
+          // ==========================================================
+          
+          // Lớp 1: Khôi phục từ khóa [SLASH] thành escape character chuẩn của JSON (\\)
+          // Nhờ đó LaTeX hiển thị mượt mà không bị sập hàm JSON.parse()
+          text = text.split('[SLASH]').join('\\\\'); 
+          
+          // Lớp 2: Xóa các ký tự điều khiển ẩn (ẩn tàng hình) do AI đôi khi sinh ra làm vỡ JSON
+          text = text.replace(/[\u0000-\u001F]+/g, ""); 
+          
           const questions = JSON.parse(text);
 
           if (!Array.isArray(questions) || questions.length < 5) {

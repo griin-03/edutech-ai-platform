@@ -1,0 +1,155 @@
+erDiagram
+    %% ---------------- CORE ENTITIES ----------------
+    USER {
+        int id PK
+        string name
+        string email
+        string role "ADMIN, TEACHER, STUDENT"
+        boolean isPro
+        float balance "Ví EduCoin"
+    }
+    COURSE {
+        int id PK
+        string title
+        string approvalStatus "DRAFT, PENDING, APPROVED"
+        boolean isPublished
+        float price
+        int authorId FK
+        int categoryId FK
+    }
+    QUESTION {
+        int id PK
+        string text
+        string type "MULTIPLE_CHOICE, SHORT_ANSWER"
+        json options
+        string correct
+        int courseId FK
+    }
+    EXAM_RESULT {
+        int id PK
+        float score
+        int violationCount
+        boolean isSuspended
+        int userId FK
+        int courseId FK
+        datetime createdAt
+    }
+    SAVED_COURSE {
+        int id PK
+        int userId FK
+        int courseId FK
+    }
+    NOTIFICATION {
+        int id PK
+        string message
+        string type "WARNING, INFO"
+        int userId FK
+    }
+
+    %% ---------------- NEW ENTITIES (12 TABLES) ----------------
+    STUDENT_ANSWER {
+        int id PK
+        int examResultId FK
+        int questionId FK
+        string selectedAnswer
+        boolean isCorrect
+    }
+    CHEAT_LOG {
+        int id PK
+        int examResultId FK
+        string violationType "Tab_Switch, Blur, Copy"
+        datetime timestamp
+    }
+    CATEGORY {
+        int id PK
+        string name "Toán, IT, English..."
+        string slug
+    }
+    PURCHASE {
+        int id PK
+        int userId FK
+        int courseId FK
+        float amountPaid
+        datetime createdAt
+    }
+    TRANSACTION {
+        int id PK
+        int userId FK
+        float amount
+        string transactionType "DEPOSIT, UPGRADE_PRO"
+        int planId FK
+    }
+    SUBSCRIPTION_PLAN {
+        int id PK
+        string name "Free, Pro 1 Month, Pro 1 Year"
+        float price
+        int durationDays
+    }
+    DAILY_TASK {
+        int id PK
+        int userId FK
+        string title
+        int xpReward
+        boolean isCompleted
+    }
+    LEARNING_PATH {
+        int id PK
+        int userId FK
+        string title
+        int progressPercent
+    }
+    REVIEW {
+        int id PK
+        int userId FK
+        int courseId FK
+        int rating "1-5"
+        string comment
+    }
+    CERTIFICATE {
+        int id PK
+        int userId FK
+        int courseId FK
+        string certUrl
+        datetime issuedAt
+    }
+    AI_GENERATION_LOG {
+        int id PK
+        int teacherId FK
+        string prompt
+        json aiResponse
+        boolean isSuccess
+    }
+    SYSTEM_SETTING {
+        string key PK
+        string value
+        string description
+    }
+
+    %% ---------------- RELATIONSHIPS ----------------
+    USER ||--o{ COURSE : "tạo (author)"
+    USER ||--o{ EXAM_RESULT : "làm bài thi"
+    USER ||--o{ SAVED_COURSE : "lưu trữ"
+    USER ||--o{ NOTIFICATION : "nhận"
+    USER ||--o{ PURCHASE : "mua khóa học"
+    USER ||--o{ DAILY_TASK : "có nhiệm vụ"
+    USER ||--o{ LEARNING_PATH : "tham gia"
+    USER ||--o{ REVIEW : "đánh giá"
+    USER ||--o{ TRANSACTION : "thực hiện giao dịch"
+    USER ||--o{ AI_GENERATION_LOG : "dùng AI sinh đề"
+    USER ||--o{ CERTIFICATE : "đạt chứng chỉ"
+
+    COURSE ||--o{ QUESTION : "chứa"
+    COURSE ||--o{ EXAM_RESULT : "được thi"
+    COURSE ||--o{ SAVED_COURSE : "được lưu"
+    COURSE ||--o{ PURCHASE : "được mua"
+    COURSE ||--o{ REVIEW : "nhận đánh giá"
+    COURSE ||--o{ CERTIFICATE : "cấp chứng chỉ"
+
+    CATEGORY ||--o{ COURSE : "phân loại"
+
+    EXAM_RESULT ||--o{ STUDENT_ANSWER : "gồm các câu trả lời"
+    EXAM_RESULT ||--o{ CHEAT_LOG : "lưu lịch sử gian lận"
+
+    QUESTION ||--o{ STUDENT_ANSWER : "được trả lời trong"
+
+    SUBSCRIPTION_PLAN ||--o{ TRANSACTION : "thanh toán cho gói"
